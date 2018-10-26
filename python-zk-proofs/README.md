@@ -1,4 +1,4 @@
-# elliptic-curves-finite-fields
+# Zero knowledge proof using elliptic-curves-finite-fields
 
 The Python code to demonstrate zero-knowledge atomic cross-blockchain swap
 
