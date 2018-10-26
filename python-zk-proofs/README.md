@@ -1,6 +1,6 @@
 # elliptic-curves-finite-fields
 
-The combined Python code for the post ["Connecting Elliptic Curves with Finite Fields"](http://jeremykun.com/2014/03/19/connecting-elliptic-curves-with-finite-fields-a-reprise/)
+The Python code to demonstrate zero-knowledge atomic cross-blockchain swap
 
 ## connect elliptic curves with finite fields
 
@@ -22,12 +22,12 @@ to prove this has algebraic structures we need to convert it into homogeneous de
 so we have [0:1:0] to be our zero point, which serves as the identity of the group, and we can test group law:
 
 1. We need there to be an the additive identity, which we’ll call zero, for which P + 0 = 0 + P = P. This is [0:1:0], we call it point O.
-1. We need every point P to have an inverse -P for which P + (-P) = 0. Look at the picture above, if we have Q, P on the curve, we can describe a third point P+Q to be -R, the point opposites R.
-1. We want adding to commute, so that P + Q = Q + P. This property of an algebraic structure is called abelian or commutative.
+2. We need every point P to have an inverse -P for which P + (-P) = 0. Look at the picture above, if we have Q, P on the curve, we can describe a third point P+Q to be -R, the point opposites R.
+3. We want adding to commute, so that P + Q = Q + P. This property of an algebraic structure is called abelian or commutative.
    - If one of the points is O, then P + O = P = O + P.
    - If P and O are opposites of each other, then P + Q = Q + P = O.
    - If P = Q then we use tangent line to the curve at this point as our line, then we also have R and -R. If P is an inflection point then R is P itself.
-1. We need addition to be associative, so that (P + Q) + R = P + (Q + R). Two points form a vertical line so it is taken care.
+4. We need addition to be associative, so that (P + Q) + R = P + (Q + R). Two points form a vertical line so it is taken care.
 
 Let k be a field and let E be the equation of an elliptic curve in Weierstrass form. Define E(k) to be a set of projective points on E with coordinates in k along with the ideal point [0:1:0]. We call E(k) the elliptic curve group for E over k.
 
