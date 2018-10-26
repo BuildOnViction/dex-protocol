@@ -18,7 +18,7 @@
 
 By default we use POA consensus for demo  
 Node1: `go run protocol/OrderBook/*.go start -privateKey keystore1 -mining true`  
-Node2: `go run protocol/OrderBook/*.go start -p2pPort=30101 -httpPort=8546 -wsPort=18544 -bzzPort=8543 -privateKey keystore2`
+Node2: `go run protocol/OrderBook/*.go start -p2pPort=30101 -httpPort=8546 -wsPort=18544 -bzzPort=8543 -privateKey keystore2`  
 Backend: `go run protocol/Backend/*.go rpc`
 
 ## TODO
