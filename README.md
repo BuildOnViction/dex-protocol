@@ -121,3 +121,8 @@ Pss enables encrypted messaging between nodes that aren't directly connected thr
 - E7_PssClient.go
 
   Mounting devp2p style protocols on an RPC connection.
+
+### Orderbook - The final implementation
+
+Orderbook is implemented as an ethereum service that supports users to record their order list in particular feeds, and supports matching engine service as well.
+[Readme](./OrderBook/README.md)

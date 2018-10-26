@@ -1,26 +1,10 @@
-## Orderbook flow
+## Update Orderlist flow
 
-```mermaid
-graph LR
-    A[Backend] -->|User Address 1| B(Token Symbole + Contract Address)
-    A[Backend] -->|User Address 2| B
-    B --> C{Swarm}
-    C -->|User Feed 1| D[Order List]
-    C -->|User Feed 2| E[Order List]
-```
+![diagram1](./images/diagram1.svg)
 
-## Crawler flow
+## Overall data flow
 
-```mermaid
-sequenceDiagram
-    participant Backend
-    participant Blockchain
-    Backend->>Blockchain: Get All Blocks
-     Note over Backend,Blockchain: User Addresses from Transactions
-    Blockchain-->>Backend: User Addresses
-    Note over Backend,Blockchain: Orders from (Coin Topic + User Address)
-    Backend->>Blockchain: Get All Orders
-```
+![diagram2](./images/diagram2.svg)
 
 ## Swarm usage
 
