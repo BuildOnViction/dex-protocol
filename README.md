@@ -1,4 +1,4 @@
-# p2p programming in go-ethereum
+# DEX protocol POC using p2p programming in go-ethereum and Swarm storage
 
 These code examples are intended to demonstrate the main building blocks of peer-to-peer comunications in go-ethereum. They are organized in chapters, where every example in a chapter builds on the next.
 
@@ -124,5 +124,5 @@ Pss enables encrypted messaging between nodes that aren't directly connected thr
 
 ### Orderbook - The final implementation
 
-Orderbook is implemented as an ethereum service that supports users to record their order list in particular feeds, and supports matching engine service as well.
-[Readme](./OrderBook/README.md)
+Orderbook is implemented as an ethereum service that supports users to record their order list in particular feeds, and supports matching engine service as well.  
+[Read more](./OrderBook/README.md)
