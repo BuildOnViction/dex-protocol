@@ -4,7 +4,7 @@
   "scripts": {
     "node1": "go run OrderBook/*.go start -privateKey keystore1 -mining true",
     "node2": "go run OrderBook/*.go start -p2pPort=30101 -httpPort=8546 -wsPort=18544 -bzzPort=8543 -privateKey keystore2",
-    "backend": "go run Backend/*.go rpc"
+    "backend": "go run OrderBook/Backend/*.go rpc"
   },
   "engines": {
     "node": ">=8.0.0",
