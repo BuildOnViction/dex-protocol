@@ -48,11 +48,11 @@ func (m *OrderbookModel) getQuery(topic feed.Topic, address common.Address) *fee
 	}
 
 	// time := time.Now().UnixNano()/int64(time.Millisecond) - Month
-	// epoch := lookup.Epoch{
-	// 	Level: 13,
-	// 	Time:  uint64(time),
-	// }
-	epoch := lookup.NoClue
+	epoch := lookup.Epoch{
+		Level: 25,
+		Time:  1538650124,
+	}
+	// epoch := lookup.NoClue
 
 	// demo.LogInfo("hash:", "address", topic.Hex())
 
@@ -152,4 +152,28 @@ func (m *OrderbookModel) ProcessOrder(orderbookMsg *OrderbookMsg) error {
 
 	return nil
 
+}
+
+func (m *OrderbookModel) UpdateData(coin, signerAddress string, epoch lookup.Epoch, hexData, hexSignature string) error {
+	topic, _ := feed.NewTopic(TopicName, []byte(coin))
+	request := new(feed.Request)
+
+	// get the current time
+
+	request.Epoch = epoch
+	request.Feed.Topic = topic
+	request.Header.Version = 0
+	request.Feed.User = common.HexToAddress(signerAddress)
+	data := common.Hex2Bytes(hexData)
+	request.SetData(data)
+	var signature feed.Signature
+	signaturebytes := common.Hex2Bytes(hexSignature)
+	copy(signature[:], signaturebytes)
+	request.Signature = &signature
+
+	if err := m.BzzClient.UpdateFeed(request); err != nil {
+		return fmt.Errorf("Error updating feed: %s", err)
+	}
+
+	return nil
 }

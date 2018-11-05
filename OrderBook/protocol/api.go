@@ -3,6 +3,8 @@ package protocol
 import (
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+
 	demo "../../common"
 )
 
@@ -79,11 +81,11 @@ func (api *OrderbookAPI) GetOrders(coin string, signerAddress string) []Orderboo
 	return messages
 }
 
-// func (api *OrderbookAPI) UpdateOrder(hashAddress string, orderMsg *OrderbookMsg) error {
+func (api *OrderbookAPI) UpdateOrders(coin string, signerAddress string, hexData, hexSignature string, time uint64, level uint8) error {
 
-// 	databytes, err := rlp.EncodeToBytes(orderMsg)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return api.Model.UpdateOrder(hashAddress, databytes)
-// }
+	epoch := lookup.Epoch{
+		Time:  time,
+		Level: level,
+	}
+	return api.Model.UpdateData(coin, signerAddress, epoch, hexData, hexSignature)
+}

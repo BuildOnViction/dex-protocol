@@ -16,6 +16,7 @@ type Argument struct {
 	AllowEdit bool
 	Hide      ArgumentHide
 	Validate  promptui.ValidateFunc
+	Remember  bool
 }
 
 type Command struct {
@@ -147,6 +148,10 @@ func (command Command) Run() map[string]string {
 		}
 
 		results[argument.Name] = result
+
+		if argument.Remember {
+			argument.Value = result
+		}
 
 	}
 	return results

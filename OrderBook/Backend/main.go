@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -88,24 +89,18 @@ func initPrompt() {
 			},
 			Description: "Update the websocket port to call RPC",
 		},
-		// {
-		// 	Name: "updateOrder",
-		// 	Arguments: []terminal.Argument{
-		// 		{Name: "orderID", Value: "1"},
-		// 		{Name: "type", Value: "limit"},
-		// 		{Name: "side", Value: "ask"},
-		// 		{Name: "quantity", Value: "10"},
-		// 		{Name: "price", Value: "100", Hide: func(results map[string]string) bool {
-		// 			// ignore this argument when order type is market
-		// 			if results["type"] == "market" {
-		// 				return true
-		// 			}
-		// 			return false
-		// 		}},
-		// 		{Name: "trade_id", Value: "1"},
-		// 	},
-		// 	Description: "Get the order from the swarm storgae",
-		// },
+		{
+			Name: "updateOrders",
+			Arguments: []terminal.Argument{
+				{Name: "coin", Value: "Tomo"},
+				{Name: "signerAddress", Value: "0x28074f8d0fd78629cd59290cac185611a8d60109"},
+				{Name: "data", Remember: true, Value: "0xf840df860166e1f6e305856c696d69748361736b8231308331303084546f6d6f3131df860166e3364e9a856c696d69748361736b8231308331303084546f6d6f3231"},
+				{Name: "level", Value: "25"},
+				{Name: "time", Value: "1541410279066"},
+				{Name: "signature", Remember: true, Value: "0x9f86532edc4d218a2034d677cdeeb0a60633632b7cbf648b19bebd4af1b442016e57dfad94e9fdff7113f08c00ae34cbc06d4d844b506bc883216154c40872531c"},
+			},
+			Description: "Get the order from the swarm storgae",
+		},
 		{
 			Name:        "getBestAskList",
 			Description: "Get best ask list",
@@ -217,6 +212,13 @@ func Start() error {
 				var orderResult []protocol.OrderbookMsg
 				err := rpcClient.Call(&orderResult, "orderbook_getOrders", results["coin"], results["signerAddress"])
 				logResult(orderResult, err)
+			case "updateOrders":
+				level, _ := strconv.ParseUint(results["level"], 10, 8)
+				time, _ := strconv.ParseUint(results["time"], 10, 64)
+				// put message on channel
+				var result error
+				err := rpcClient.Call(&result, "orderbook_updateOrders", results["coin"], results["signerAddress"], results["data"], results["signature"], time, uint8(level))
+				logResult(result, err)
 			case "getBestAskList":
 				demo.LogInfo("-> Best ask list:")
 				callRPC(result, "orderbook_getBestAskList")
