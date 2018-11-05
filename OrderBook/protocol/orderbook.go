@@ -155,22 +155,23 @@ func (m *OrderbookModel) ProcessOrder(orderbookMsg *OrderbookMsg) error {
 }
 
 func (m *OrderbookModel) UpdateData(coin, signerAddress string, epoch lookup.Epoch, hexData, hexSignature string) error {
-	topic, _ := feed.NewTopic(TopicName, []byte(coin))
-	request := new(feed.Request)
+	topic, _ := m.getTopic(coin)
+	address := m.Signer.Address()
 
-	// get the current time
-
+	// demo.LogInfo("hash:", "address", topic.Hex())
+	lookupParams := m.getQuery(topic, address)
+	request, _ := m.BzzClient.GetFeedRequest(lookupParams, "")
 	request.Epoch = epoch
-	request.Feed.Topic = topic
-	request.Header.Version = 0
-	request.Feed.User = common.HexToAddress(signerAddress)
 	data := common.Hex2Bytes(hexData)
 	request.SetData(data)
+	// request.Sign(m.Signer)
+	correct := request.Signature
 	var signature feed.Signature
 	signaturebytes := common.Hex2Bytes(hexSignature)
 	copy(signature[:], signaturebytes)
 	request.Signature = &signature
 
+	demo.LogInfo("Testing", "signature", fmt.Sprintf("%0x", signature), "correct", fmt.Sprintf("%0x", correct))
 	if err := m.BzzClient.UpdateFeed(request); err != nil {
 		return fmt.Errorf("Error updating feed: %s", err)
 	}

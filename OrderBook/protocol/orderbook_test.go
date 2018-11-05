@@ -59,34 +59,11 @@ func TestRLPEncode(t *testing.T) {
 		t.Fatalf("digest is not correct")
 	}
 
-	privkey, _ := crypto.LoadECDSA("/home/tu/MyProjects/tomo-dex/protocol/OrderBook/keystore1")
+	keyBytes := common.Hex2Bytes("3411b45169aa5a8312e51357db68621031020dcf46011d7431db1bbb6d3922ce")
+	privkey, _ := crypto.ToECDSA(keyBytes)
+	signer := feed.NewGenericSigner(privkey)
+	signature, _ := signer.Sign(digest)
 
-	signaturebytes, _ := crypto.Sign(digest.Bytes(), privkey)
+	t.Logf("Signature: %0x", signature)
 
-	t.Logf("Signature: 0x%s", common.Bytes2Hex(signaturebytes))
-
-}
-
-func TestFeedSignature(t *testing.T) {
-	digest := common.HexToHash("0x5d0b9083d549a5f0d3083d825ecb9fb298061e6d2861fb6f3234721bccbb6355")
-	privkey, _ := crypto.LoadECDSA("/home/tu/MyProjects/tomo-dex/protocol/OrderBook/keystore1")
-
-	signaturebytes, _ := crypto.Sign(digest.Bytes(), privkey)
-
-	t.Logf("Signature: 0x%s", common.Bytes2Hex(signaturebytes))
-
-	msg := &OrderbookMsg{
-		Coin:      "Tomo",
-		ID:        "1",
-		Price:     "100",
-		Quantity:  "10",
-		Side:      "ask",
-		Timestamp: 1541411489,
-		TradeID:   "1",
-		Type:      "limit",
-	}
-
-	data, _ := rlp.EncodeToBytes(msg)
-
-	t.Logf("data :%s", data)
 }

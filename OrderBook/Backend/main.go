@@ -12,9 +12,12 @@ import (
 	demo "../../common"
 	"../protocol"
 	"../terminal"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 	"github.com/manifoldco/promptui"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -89,15 +92,43 @@ func initPrompt() {
 			},
 			Description: "Update the websocket port to call RPC",
 		},
+		// 0x is only for address, data must not be prepend with this
 		{
 			Name: "updateOrders",
 			Arguments: []terminal.Argument{
 				{Name: "coin", Value: "Tomo"},
 				{Name: "signerAddress", Value: "0x28074f8d0fd78629cd59290cac185611a8d60109"},
-				{Name: "data", Remember: true, Value: "0xf840df860166e1f6e305856c696d69748361736b8231308331303084546f6d6f3131df860166e3364e9a856c696d69748361736b8231308331303084546f6d6f3231"},
+				{Name: "data", Remember: true, Value: "dedd845bb5f00c856c696d69748361736b8231308331303084546f6d6f3231"},
 				{Name: "level", Value: "25"},
-				{Name: "time", Value: "1541410279066"},
-				{Name: "signature", Remember: true, Value: "0x9f86532edc4d218a2034d677cdeeb0a60633632b7cbf648b19bebd4af1b442016e57dfad94e9fdff7113f08c00ae34cbc06d4d844b506bc883216154c40872531c"},
+				{Name: "time", Value: "15414102790"},
+				{Name: "signature", Hide: func(results map[string]string, thisArgument *terminal.Argument) bool {
+					// ignore this argument when order type is market
+					topic, _ := feed.NewTopic("Token", []byte(results["coin"]))
+					request := new(feed.Request)
+
+					// get the current time
+					level, _ := strconv.ParseUint(results["level"], 10, 8)
+					time, _ := strconv.ParseUint(results["time"], 10, 64)
+					request.Epoch = lookup.Epoch{
+						Time:  time,
+						Level: uint8(level),
+					}
+					data := common.Hex2Bytes(results["data"])
+					request.Feed.Topic = topic
+					request.Header.Version = 0
+					request.Feed.User = common.HexToAddress("0x28074f8D0fD78629CD59290Cac185611a8d60109")
+					request.SetData(data)
+					digest, _ := request.GetDigest()
+
+					keyBytes := common.Hex2Bytes("3411b45169aa5a8312e51357db68621031020dcf46011d7431db1bbb6d3922ce")
+					privkey, _ := crypto.ToECDSA(keyBytes)
+					signer := feed.NewGenericSigner(privkey)
+					signature, _ := signer.Sign(digest)
+
+					thisArgument.Value = fmt.Sprintf("%0x", signature)
+
+					return false
+				}, Remember: true, Value: "fe1a570e96e96e8ab2604451cb518ecab295cc743db6f006c9d14de0557a8b420fda798f0f7eba876dfe29073678c57384375dfdf51a33233d6bc61b337f69ff1b"},
 			},
 			Description: "Get the order from the swarm storgae",
 		},
@@ -216,7 +247,7 @@ func Start() error {
 				level, _ := strconv.ParseUint(results["level"], 10, 8)
 				time, _ := strconv.ParseUint(results["time"], 10, 64)
 				// put message on channel
-				var result error
+				var result interface{}
 				err := rpcClient.Call(&result, "orderbook_updateOrders", results["coin"], results["signerAddress"], results["data"], results["signature"], time, uint8(level))
 				logResult(result, err)
 			case "getBestAskList":

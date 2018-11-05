@@ -8,7 +8,7 @@ import (
 	"github.com/manifoldco/promptui"
 )
 
-type ArgumentHide func(results map[string]string) bool
+type ArgumentHide func(results map[string]string, argument *Argument) bool
 
 type Argument struct {
 	Name      string
@@ -121,7 +121,7 @@ func (command Command) Run() map[string]string {
 	for _, argument := range command.Arguments {
 		// check argument hide function
 		if argument.Hide != nil {
-			hide := argument.Hide(results)
+			hide := argument.Hide(results, &argument)
 			if hide {
 				continue
 			}

@@ -72,7 +72,7 @@ func initPrompt(privateKeyName string) {
 		{Name: "type", Value: "limit"},
 		{Name: "side", Value: orderbook.ASK},
 		{Name: "quantity", Value: "10"},
-		{Name: "price", Value: "100", Hide: func(results map[string]string) bool {
+		{Name: "price", Value: "100", Hide: func(results map[string]string, thisArgument *terminal.Argument) bool {
 			// ignore this argument when order type is market
 			if results["type"] == "market" {
 				return true
