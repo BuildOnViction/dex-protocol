@@ -47,6 +47,13 @@ func TestRLPEncode(t *testing.T) {
 	t.Logf("Topic hex: %s", topic.Hex())
 	t.Logf("Message digest: %s", digest.Hex())
 
+	keyBytes := common.Hex2Bytes("3411b45169aa5a8312e51357db68621031020dcf46011d7431db1bbb6d3922ce")
+	privkey, _ := crypto.ToECDSA(keyBytes)
+	signer := feed.NewGenericSigner(privkey)
+	signature, _ := signer.Sign(digest)
+
+	t.Logf("Signature: %0x", signature)
+
 	if topic.Hex() != "0x0000060a6e000000000000000000000000000000000000000000000000000000" {
 		t.Fatalf("topic hex is not correct")
 	}
@@ -58,12 +65,5 @@ func TestRLPEncode(t *testing.T) {
 	if digest.Hex() != "0xb40bfc0e66053d4b0525bfe683ca0e85a79ce96d228691ac342994bbaaa0ac97" {
 		t.Fatalf("digest is not correct")
 	}
-
-	keyBytes := common.Hex2Bytes("3411b45169aa5a8312e51357db68621031020dcf46011d7431db1bbb6d3922ce")
-	privkey, _ := crypto.ToECDSA(keyBytes)
-	signer := feed.NewGenericSigner(privkey)
-	signature, _ := signer.Sign(digest)
-
-	t.Logf("Signature: %0x", signature)
 
 }
