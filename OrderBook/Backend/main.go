@@ -1,5 +1,6 @@
-// pss RPC routed over swarm
 package main
+
+// pss RPC routed over swarm
 
 import (
 	"context"
@@ -9,9 +10,6 @@ import (
 	"sync"
 	"time"
 
-	demo "../../common"
-	"../protocol"
-	"../terminal"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
@@ -19,6 +17,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 	"github.com/manifoldco/promptui"
+	demo "github.com/tomochain/orderbook/common"
+	"github.com/tomochain/orderbook/protocol"
+	"github.com/tomochain/orderbook/terminal"
 	"gopkg.in/urfave/cli.v1"
 )
 

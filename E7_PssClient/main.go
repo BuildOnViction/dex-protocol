@@ -17,7 +17,6 @@ import (
 // simple ping and receive protocol
 var (
 	topic = pss.PingTopic
-	quitC = make(chan struct{})
 )
 
 func main() {

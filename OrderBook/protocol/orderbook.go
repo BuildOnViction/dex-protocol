@@ -7,11 +7,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 
-	demo "../../common"
-	"../orderbook"
 	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+	demo "github.com/tomochain/orderbook/common"
+	"github.com/tomochain/orderbook/orderbook"
 )
 
 const (

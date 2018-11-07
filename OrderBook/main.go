@@ -21,10 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 
-	demo "../common"
-	"./orderbook"
-	"./protocol"
-	"./terminal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -32,15 +28,20 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/manifoldco/promptui"
+	demo "github.com/tomochain/orderbook/common"
+	"github.com/tomochain/orderbook/orderbook"
+	"github.com/tomochain/orderbook/protocol"
+	"github.com/tomochain/orderbook/terminal"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
 // command line arguments
 var (
 	thisNode *node.Node
-	quitC    = make(chan bool)
-	app      = cli.NewApp()
-	privkey  *ecdsa.PrivateKey
+	// struct{} is the smallest data type available in Go, since it contains literally nothing
+	quitC   = make(chan struct{}, 1)
+	app     = cli.NewApp()
+	privkey *ecdsa.PrivateKey
 
 	pssprotos = []*pss.Protocol{}
 	// get the incoming message
@@ -201,7 +202,7 @@ func Start(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey string
 				demo.LogInfo("Server quiting...")
 				endWaiter.Done()
 				thisNode.Stop()
-				quitC <- true
+				quitC <- struct{}{}
 				demo.LogInfo("-> Goodbye\n")
 				return
 			}

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strconv"
 
-	demo "../../common"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/pss"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 var (
@@ -75,7 +75,7 @@ type OrderbookHandler struct {
 	Model *OrderbookModel
 	Peer  *protocols.Peer
 	InC   <-chan interface{}
-	QuitC <-chan bool
+	QuitC <-chan struct{}
 }
 
 // we will receive message in handle
@@ -129,7 +129,7 @@ func (orderbookHandler *OrderbookHandler) handle(ctx context.Context, msg interf
 }
 
 // create the protocol with the protocols extension
-func New(inC <-chan interface{}, quitC <-chan bool, orderbookModel *OrderbookModel) *p2p.Protocol {
+func New(inC <-chan interface{}, quitC <-chan struct{}, orderbookModel *OrderbookModel) *p2p.Protocol {
 	return &p2p.Protocol{
 		Name:    "Orderbook",
 		Version: 42,

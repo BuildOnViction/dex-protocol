@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
-	demo "../../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 // remember that API structs to be offered MUST be exported
