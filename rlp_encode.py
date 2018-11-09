@@ -2,6 +2,7 @@ import sys
 import json
 from termcolor import colored
 
+
 def rlp_encode(input):
     if isinstance(input, str):
         if len(input) == 1 and ord(input) < 0x80:
@@ -65,5 +66,5 @@ if __name__ == "__main__":
     represent += " {} = ".format(json.dumps(input))
     # finally output
     output = rlp_encode(input)
-    represent += format_rlp_encode(output) 
+    represent += format_rlp_encode(output)
     print(colored(represent, 'green'))
