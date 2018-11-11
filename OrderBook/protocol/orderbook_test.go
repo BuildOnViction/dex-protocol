@@ -77,7 +77,7 @@ func TestRLP(t *testing.T) {
 			ID:        "1",
 			Coin:      "Tomo",
 			Price:     "100",
-			Quantity:  "20",
+			Quantity:  "50",
 			Side:      "ask",
 			Timestamp: 1538650124,
 			TradeID:   "1",
@@ -89,7 +89,7 @@ func TestRLP(t *testing.T) {
 			Price:     "100",
 			Quantity:  "20",
 			Side:      "ask",
-			Timestamp: 1538650124,
+			Timestamp: 1538650125,
 			TradeID:   "1",
 			Type:      "limit",
 		}}

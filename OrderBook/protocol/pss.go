@@ -26,16 +26,16 @@ var (
 	OrderbookTopic = pss.ProtocolTopic(OrderbookProtocol)
 )
 
-// can use map directly, or type that rlpx supports, such as uint(must >0)
+// OrderbookMsg : sort fields by ASC, can use map directly, or type that rlpx supports, such as uint(must >0)
 type OrderbookMsg struct {
-	Timestamp uint64
-	Type      string
-	Side      string
-	Quantity  string
-	Price     string
 	Coin      string
 	ID        string
+	Price     string
+	Quantity  string
+	Side      string
+	Timestamp uint64
 	TradeID   string
+	Type      string
 }
 
 func (msg *OrderbookMsg) ToQuote() map[string]string {
