@@ -120,8 +120,8 @@ func NewSwarmServiceWithProtocolAndPrivateKey(stack *node.Node, bzzport int, spe
 
 		// configure and create a swarm instance
 		bzzdir := stack.InstanceDir() // todo: what is the difference between this and datadir?
-
 		bzzconfig := bzzapi.NewConfig()
+		bzzconfig.Cors = "*" // allow access to all
 		bzzconfig.NetworkID = BzzDefaultNetworkId
 		bzzconfig.DeliverySkipCheck = true
 		bzzconfig.SyncingSkipCheck = true
