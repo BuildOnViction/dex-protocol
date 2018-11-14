@@ -12,16 +12,34 @@ import (
 
 // set up an object that can contain the API methods
 // these API methods can be used for orderbook
-type FooAPI struct {
+type CrudAPI struct {
 	V int
 }
+
+var database = make(map[string]string)
 
 // a valid API method is exported, has a pointer receiver and returns error as last argument
 // the method will be called with <registeredname>_helloWorld
 // (first letter in method is lowercase, module name and method name separated by underscore)
-func (api *FooAPI) HelloWorld(name string) (string, error) {
-	demo.LogInfo("Get request", "name", name)
-	return fmt.Sprintf("Hello %s", name), nil
+func (api *CrudAPI) Put(key, value string) (string, error) {
+	demo.LogInfo("Get put request", "key", key, "value", value)
+	database[key] = value
+	return fmt.Sprintf("Put %s success", key), nil
+}
+
+func (api *CrudAPI) Get(keys []string) ([]string, error) {
+	demo.LogInfo("Get read request", "keys", keys)
+	var result []string
+	for _, key := range keys {
+		result = append(result, database[key])
+	}
+	return result, nil
+}
+
+func (api *CrudAPI) Delete(key string) (string, error) {
+	demo.LogInfo("Get delete request", "key", key)
+	delete(database, key)
+	return fmt.Sprintf("Delete %s success", key), nil
 }
 
 func main() {
@@ -29,19 +47,20 @@ func main() {
 	// set up the RPC server
 	timeouts := rpc.DefaultHTTPTimeouts
 	vhost := node.DefaultConfig.HTTPVirtualHosts
-	cors := []string{""}
+	cors := []string{"*"}
 	rpcAPIs := []rpc.API{
 		{
-			Namespace: "foo",
+			Namespace: "crud",
 			Public:    true,
-			Service: &FooAPI{
+			Service: &CrudAPI{
 				V: 42,
 			},
 			Version: "1.0",
 		},
 	}
-	modules := []string{"foo"}
-	listener, rpcsrv, err := rpc.StartHTTPEndpoint("localhost:8454", rpcAPIs, modules, cors, vhost, timeouts)
+	modules := []string{"crud"}
+	address := fmt.Sprintf("localhost:%d", node.DefaultHTTPPort)
+	listener, rpcsrv, err := rpc.StartHTTPEndpoint(address, rpcAPIs, modules, cors, vhost, timeouts)
 	if err != nil {
 		demo.LogCrit("Register API method(s) fail", "err", err)
 	} else {
