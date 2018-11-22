@@ -11,7 +11,7 @@ Example:
 suppose we have _F<sub>23</sub>_ is integers over prime _p = 23_  
 with _n = 7_, we have _F<sub>23</sub>(7) = 7 mod 23_  
 _x = F<sub>23</sub>(7).inverse() = 10 mod 23_  
-_xn = 70 mod 23 = 1_, so _x = n<sup>-1</sup>_  
+_xn = 70 mod 23 = 1_, so _x = n<sup>-1</sup>_ which means we can say x*n*m = m  
 ![symetric](./images/points-example.png)![tangent](./images/ecclines.png)
 
 suppose we have irreducible or prime polynomial:
