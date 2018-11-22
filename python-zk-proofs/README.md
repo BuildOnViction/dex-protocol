@@ -35,7 +35,8 @@ Let k be a field and let E be the equation of an elliptic curve in Weierstrass f
 
 Public information: F<sub>q</sub>, E, b, r, Q, P  
 **m**: message, **E**: elliptic curve, **F<sub>q</sub>**: finite field order _q_, **b**: a small integer, **r**: a large prime, **br** = number of points on _E_  
-**Q**: base point that has order _r_ and a secret _s_, **P**: P = sQ.  
+**Q**: base point that has order _r_ and a secret _s_, public key **P**: P = sQ.  
+*The multiplication is one way function, so that it is impractical to do s = P/Q*  
 (the order of the base point is the number of points the base point generates under repeated addition)  
 Message _m_ is represented as an integer of most _r_  
 **Sign phase:**  
