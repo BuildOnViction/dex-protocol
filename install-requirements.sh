@@ -3,3 +3,6 @@ go get github.com/fatih/color
 go get github.com/shopspring/decimal
 go get gopkg.in/oleiade/lane.v1
 go get github.com/manifoldco/promptui
+
+# swap 
+go get github.com/tyler-smith/go-bip32

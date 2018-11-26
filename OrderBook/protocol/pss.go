@@ -83,6 +83,12 @@ func (orderbookHandler *OrderbookHandler) handle(ctx context.Context, msg interf
 
 	// we got message or handshake
 	message, ok := msg.(*OrderbookMsg)
+
+	// switch message := x.(type) {
+	// case *OrderbookMsg:
+
+	// }
+
 	if ok {
 
 		demo.LogDebug("Received orderbook", "orderbook", message, "peer", orderbookHandler.Peer)

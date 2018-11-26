@@ -1,180 +1,91 @@
 package protocol
 
 import (
-	"fmt"
-	"io/ioutil"
+	"strconv"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
-
-	"github.com/ethereum/go-ethereum/swarm/api/client"
-	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+
 	demo "github.com/tomochain/orderbook/common"
-	"github.com/tomochain/orderbook/orderbook"
 )
 
-const (
-	Day       = 60 * 60 * 24
-	Year      = Day * 365
-	Month     = Day * 30
-	TopicName = "Token"
-)
-
-// OrderBookModel : singleton orderbook for testing
-type OrderbookModel struct {
-	Orderbook *orderbook.OrderBook
-	BzzClient *client.Client
-	Signer    *feed.GenericSigner
+// remember that API structs to be offered MUST be exported
+type OrderbookAPI struct {
+	V     int
+	Model *OrderbookModel
 }
 
-func NewModel(bzzURL string, signer *feed.GenericSigner) *OrderbookModel {
-	demo.LogDebug("Creating model", "signerAddress", signer.Address().Hex())
-	return &OrderbookModel{
-		Orderbook: orderbook.NewOrderBook(),
-		BzzClient: client.NewClient(bzzURL),
-		Signer:    signer,
+// Version : return version
+func (api *OrderbookAPI) Version() (int, error) {
+	return api.V, nil
+}
+
+func NewOrderbookAPI(v int, orderbookModel *OrderbookModel) *OrderbookAPI {
+	return &OrderbookAPI{
+		V:     v,
+		Model: orderbookModel,
 	}
 }
 
-func (m *OrderbookModel) getTopic(coin string) (feed.Topic, error) {
-	return feed.NewTopic(TopicName, []byte(coin))
+func (api *OrderbookAPI) GetBestAskList() []map[string]string {
+	orderList := api.Model.Orderbook.Asks.MaxPriceList()
+	if orderList == nil {
+		return nil
+	}
+	// t.Logf("Best ask List : %s", orderList.String(0))
+	cusor := orderList.HeadOrder
+	// we have length
+	var results []map[string]string
+	for cusor != nil {
+		record := make(map[string]string)
+		record["timestamp"] = strconv.Itoa(cusor.Timestamp)
+		record["price"] = cusor.Price.String()
+		record["quantity"] = cusor.Quantity.String()
+		record["order_id"] = cusor.OrderID
+		record["trade_id"] = cusor.TradeID
+
+		results = append(results, record)
+
+		cusor = cusor.NextOrder
+	}
+	return results
 }
 
-func (m *OrderbookModel) getQuery(topic feed.Topic, address common.Address) *feed.Query {
-	fd := &feed.Feed{
-		Topic: topic,
-		User:  address,
+func (api *OrderbookAPI) GetBestBidList() []map[string]string {
+	orderList := api.Model.Orderbook.Bids.MinPriceList()
+	// t.Logf("Best ask List : %s", orderList.String(0))
+	if orderList == nil {
+		return nil
 	}
+	cusor := orderList.TailOrder
+	// we have length
+	results := make([]map[string]string, orderList.Length)
+	for cusor != nil {
+		record := make(map[string]string)
+		record["timestamp"] = strconv.Itoa(cusor.Timestamp)
+		record["price"] = cusor.Price.String()
+		record["quantity"] = cusor.Quantity.String()
+		record["order_id"] = cusor.OrderID
+		record["trade_id"] = cusor.TradeID
 
-	// time := time.Now().UnixNano()/int64(time.Millisecond) - Month
+		results = append(results, record)
+
+		cusor = cusor.PrevOrder
+	}
+	return results
+
+}
+
+func (api *OrderbookAPI) GetOrders(coin string, signerAddress string) []OrderbookMsg {
+	messages, _ := api.Model.GetOrdersByAddress(coin, signerAddress)
+	demo.LogInfo("Got data", "coin", coin, "address", signerAddress, "messages", messages)
+	return messages
+}
+
+func (api *OrderbookAPI) UpdateOrders(coin string, signerAddress string, hexData, hexSignature string, time uint64, level uint8) error {
+
 	epoch := lookup.Epoch{
-		Level: 25,
-		Time:  1538650124,
+		Time:  time,
+		Level: level,
 	}
-	// epoch := lookup.NoClue
-
-	// demo.LogInfo("hash:", "address", topic.Hex())
-
-	return feed.NewQueryLatest(fd, epoch)
-}
-
-func (m *OrderbookModel) GetOrdersByAddress(coin, signerAddress string) ([]OrderbookMsg, error) {
-	// topic, _ := m.getTopic(coin)
-	topic, _ := m.getTopic(coin)
-	address := common.HexToAddress(signerAddress)
-	lookupParams := m.getQuery(topic, address)
-	return m.GetOrdersByQuery(lookupParams)
-}
-
-func (m *OrderbookModel) GetOrdersByQuery(lookupParams *feed.Query) (messages []OrderbookMsg, err error) {
-
-	reader, err := m.BzzClient.QueryFeed(lookupParams, "")
-
-	// reader, err := m.BzzClient.QueryFeed(nil, hash)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error retrieving feed updates: %s", err)
-	}
-	defer reader.Close()
-	databytes, err := ioutil.ReadAll(reader)
-
-	if databytes == nil || err != nil {
-		return nil, err
-	}
-
-	// try to decode
-	err = rlp.DecodeBytes(databytes, &messages)
-	// demo.LogInfo("Data bytes", "messages", messages)
-	return messages, err
-}
-
-func (m *OrderbookModel) ProcessOrder(orderbookMsg *OrderbookMsg) error {
-
-	topic, _ := m.getTopic(orderbookMsg.Coin)
-	address := m.Signer.Address()
-
-	// demo.LogInfo("hash:", "address", topic.Hex())
-	lookupParams := m.getQuery(topic, address)
-
-	messages, err := m.GetOrdersByQuery(lookupParams)
-	var isNew = false
-	if messages == nil {
-		isNew = true
-		messages = []OrderbookMsg{*orderbookMsg}
-	} else {
-		// find item if found then append, else update
-		var found = false
-		for i, message := range messages {
-			if message.ID == orderbookMsg.ID {
-				found = true
-				messages[i] = *orderbookMsg
-				break
-			}
-		}
-		if !found {
-			messages = append(messages, *orderbookMsg)
-		}
-	}
-
-	databytes, err := rlp.EncodeToBytes(messages)
-	if err != nil {
-		return fmt.Errorf("Can not serialize data: %s", err)
-	}
-
-	if isNew {
-		createRequest := feed.NewFirstRequest(topic)
-
-		createRequest.SetData(databytes)
-		if err := createRequest.Sign(m.Signer); err != nil {
-			return fmt.Errorf("Error signing update: %s", err)
-		}
-
-		hashAddress, err := m.BzzClient.CreateFeedWithManifest(createRequest)
-		demo.LogInfo("Save to swarm", "address", hashAddress, "error", err)
-		return err
-	}
-
-	// other wise just update it
-	updateRequest, err := m.BzzClient.GetFeedRequest(lookupParams, "")
-	if err != nil {
-		return fmt.Errorf("Error retrieving update request template: %s", err)
-	}
-
-	updateRequest.SetData(databytes)
-	if err := updateRequest.Sign(m.Signer); err != nil {
-		return fmt.Errorf("Error signing update: %s", err)
-	}
-
-	if err = m.BzzClient.UpdateFeed(updateRequest); err != nil {
-		return fmt.Errorf("Error updating feed: %s", err)
-	}
-
-	return nil
-
-}
-
-func (m *OrderbookModel) UpdateData(coin, signerAddress string, epoch lookup.Epoch, hexData, hexSignature string) error {
-	topic, _ := m.getTopic(coin)
-	address := m.Signer.Address()
-
-	// demo.LogInfo("hash:", "address", topic.Hex())
-	lookupParams := m.getQuery(topic, address)
-	request, _ := m.BzzClient.GetFeedRequest(lookupParams, "")
-	request.Epoch = epoch
-	data := common.Hex2Bytes(hexData)
-	request.SetData(data)
-	// request.Sign(m.Signer)
-	correct := request.Signature
-	var signature feed.Signature
-	signaturebytes := common.Hex2Bytes(hexSignature)
-	copy(signature[:], signaturebytes)
-	request.Signature = &signature
-
-	demo.LogInfo("Testing", "signature", fmt.Sprintf("%0x", signature), "correct", fmt.Sprintf("%0x", correct))
-	if err := m.BzzClient.UpdateFeed(request); err != nil {
-		return fmt.Errorf("Error updating feed: %s", err)
-	}
-
-	return nil
+	return api.Model.UpdateData(coin, signerAddress, epoch, hexData, hexSignature)
 }
