@@ -1,3 +1,8 @@
+## Deployment guide step by step
+
+https://github.com/tomochain/dex-client/blob/master/Deployment_step_by_step.md
+
+
 ## Update Orderlist flow
 
 ![diagram1](./images/diagram1.svg)
