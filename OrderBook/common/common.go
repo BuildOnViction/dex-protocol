@@ -145,9 +145,12 @@ func NewSwarmServiceWithProtocolAndPrivateKey(stack *node.Node, bzzport int, spe
 				return nil, err
 			}
 
+			// wrap to handler
+			handler := pss.NewHandler(p.Handle)
+
 			// register topic for this protocol
 			if topic != nil {
-				p.Pss.Register(topic, p.Handle)
+				p.Pss.Register(topic, handler)
 			}
 			// append to pssprotos
 			if pssprotos != nil {
