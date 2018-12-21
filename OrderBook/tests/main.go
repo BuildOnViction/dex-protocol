@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
 
@@ -114,12 +115,22 @@ func main() {
 
 	contractData := dump.Accounts[common.Bytes2Hex(contractAddress.Bytes())]
 
+	loc := new(big.Int)
+	//balances is 3
+	loc.SetUint64(3)
+	stateValue := statedb.GetState(contractAddress, common.BigToHash(loc))
+	balance := new(big.Int)
+	balance.SetBytes(stateValue.Bytes())
+
+	fmt.Printf("Storage trie of AE contract:\n")
 	for key, value := range contractData.Storage {
 		bytesValue := common.Hex2Bytes(value)
 		var data interface{}
 		rlp.DecodeBytes(bytesValue, &data)
-		fmt.Printf("Key: %s, value: %v\n", key, data)
+		fmt.Printf("Key: %s, value: %x\n", key, data)
 	}
+
+	fmt.Printf("balance index: 3, AE balance value :%s", balance.String())
 
 	// utils.PrintJSON(contractData)
 
