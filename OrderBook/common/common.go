@@ -202,6 +202,12 @@ func ToJSON(obj interface{}) string {
 }
 
 func NewServiceNodeWithPrivateKey(privateKey *ecdsa.PrivateKey, port int, httpport int, wsport int, modules ...string) (*node.Node, error) {
+	dataDir := fmt.Sprintf("%s%d", DatadirPrefix, port)
+	return NewServiceNodeWithPrivateKeyAndDataDir(privateKey, dataDir, port, httpport, wsport, modules...)
+
+}
+
+func NewServiceNodeWithPrivateKeyAndDataDir(privateKey *ecdsa.PrivateKey, dataDir string, port int, httpport int, wsport int, modules ...string) (*node.Node, error) {
 	if port == 0 {
 		port = P2pPort
 	}
@@ -210,7 +216,7 @@ func NewServiceNodeWithPrivateKey(privateKey *ecdsa.PrivateKey, port int, httppo
 	cfg.P2P.EnableMsgEvents = true
 	cfg.P2P.NoDiscovery = true
 	cfg.IPCPath = IPCName
-	cfg.DataDir = fmt.Sprintf("%s%d", DatadirPrefix, port)
+	cfg.DataDir = dataDir
 	if privateKey != nil {
 		cfg.P2P.PrivateKey = privateKey
 	}

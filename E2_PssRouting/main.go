@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 
-	demo "../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 func main() {

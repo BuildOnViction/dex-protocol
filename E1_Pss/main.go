@@ -14,7 +14,7 @@ import (
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 
-	demo "../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 func newService(bzzdir string, bzzport int, bzznetworkid uint64) func(ctx *node.ServiceContext) (node.Service, error) {

@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	demo "../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 // the fooservice retrieves the shared value

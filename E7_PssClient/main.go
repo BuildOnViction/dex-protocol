@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	pssclient "github.com/ethereum/go-ethereum/swarm/pss/client"
 
-	demo "../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 // simple ping and receive protocol

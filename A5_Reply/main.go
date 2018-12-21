@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 
-	demo "../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 var (

@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/ethereum/go-ethereum/crypto"
 
-	demo "../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 // the best way to learn is stick to the code, simple

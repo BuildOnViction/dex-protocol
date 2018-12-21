@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 
-	demo "../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 var (

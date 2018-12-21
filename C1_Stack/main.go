@@ -4,7 +4,7 @@ package main
 import (
 	"os"
 
-	demo "../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 func main() {

@@ -7,10 +7,10 @@ import (
 	"regexp"
 	"sync"
 
-	demo "../../common"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/manifoldco/promptui"
+	demo "github.com/tomochain/orderbook/common"
 	"github.com/tomochain/orderbook/terminal"
 	cli "gopkg.in/urfave/cli.v1"
 )

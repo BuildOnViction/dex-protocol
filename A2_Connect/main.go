@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 
-	demo "../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 func main() {

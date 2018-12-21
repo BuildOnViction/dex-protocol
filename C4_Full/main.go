@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rpc"
 
-	demo "../common"
+	demo "github.com/tomochain/orderbook/common"
 )
 
 var (
