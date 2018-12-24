@@ -137,6 +137,7 @@ func NewSwarmServiceWithProtocolAndPrivateKey(stack *node.Node, bzzport int, spe
 		}
 
 		for i, s := range specs {
+
 			p, err := svc.RegisterPssProtocol(s, protocols[i], &pss.ProtocolParams{
 				Asymmetric: true,
 				Symmetric:  true,
@@ -146,8 +147,8 @@ func NewSwarmServiceWithProtocolAndPrivateKey(stack *node.Node, bzzport int, spe
 			}
 
 			// wrap to handler
-			handler := pss.NewHandler(p.Handle)
-
+			// handler := pss.NewHandler(p.Handle)
+			handler := p.Handle
 			// register topic for this protocol
 			if topic != nil {
 				p.Pss.Register(topic, handler)

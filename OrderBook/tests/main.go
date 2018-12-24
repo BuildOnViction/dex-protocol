@@ -1,20 +1,18 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tomochain/backend-matching-engine/utils"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // TokenABI is the input ABI used to generate the binding from.
@@ -22,50 +20,18 @@ const TokenABI = "[{\"constant\":true,\"inputs\":[],\"name\":\"mintingFinished\"
 
 // const TokenBin = `0x60606040526004805460ff19169055341561001957600080fd5b604051604080610b74833981016040528080519190602001805160008054600160a060020a03191633600160a060020a031617905560035490925061006c9150826401000000006100c28102610a4b1704565b600355600160a060020a03821660009081526002602052604090205461009f9082640100000000610a4b6100c282021704565b600160a060020a03909216600090815260026020526040902091909155506100d8565b6000828201838110156100d157fe5b9392505050565b610a8d806100e76000396000f300606060405236156100cd5763ffffffff7c010000000000000000000000000000000000000000000000000000000060003504166305d2035b81146100d2578063095ea7b3146100f957806313af40351461011b57806318160ddd1461013c57806323b872dd1461016157806340c10f191461018957806366188463146101ab57806370a08231146101cd5780637d64bcb4146101ec5780638da5cb5b146101ff57806395d89b411461022e578063a9059cbb146102b8578063d73dd623146102da578063dd62ed3e146102fc575b600080fd5b34156100dd57600080fd5b6100e5610321565b604051901515815260200160405180910390f35b341561010457600080fd5b6100e5600160a060020a036004351660243561032a565b341561012657600080fd5b61013a600160a060020a0360043516610396565b005b341561014757600080fd5b61014f61041c565b60405190815260200160405180910390f35b341561016c57600080fd5b6100e5600160a060020a0360043581169060243516604435610422565b341561019457600080fd5b6100e5600160a060020a03600435166024356105a4565b34156101b657600080fd5b6100e5600160a060020a03600435166024356106a9565b34156101d857600080fd5b61014f600160a060020a03600435166107a3565b34156101f757600080fd5b6100e56107be565b341561020a57600080fd5b610212610829565b604051600160a060020a03909116815260200160405180910390f35b341561023957600080fd5b610241610838565b60405160208082528190810183818151815260200191508051906020019080838360005b8381101561027d578082015183820152602001610265565b50505050905090810190601f1680156102aa5780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b34156102c357600080fd5b6100e5600160a060020a036004351660243561086f565b34156102e557600080fd5b6100e5600160a060020a036004351660243561096a565b341561030757600080fd5b61014f600160a060020a0360043581169060243516610a0e565b60045460ff1681565b600160a060020a03338116600081815260016020908152604080832094871680845294909152808220859055909291907f8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b9259085905190815260200160405180910390a350600192915050565b60005433600160a060020a039081169116146103b157600080fd5b600054600160a060020a0380831691167fcbf985117192c8f614a58aaf97226bb80a754772f5f6edf06f87c675f2e6c66360405160405180910390a36000805473ffffffffffffffffffffffffffffffffffffffff1916600160a060020a0392909216919091179055565b60035490565b6000600160a060020a038316151561043957600080fd5b600160a060020a03841660009081526002602052604090205482111561045e57600080fd5b600160a060020a038085166000908152600160209081526040808320339094168352929052205482111561049157600080fd5b600160a060020a0384166000908152600260205260409020546104ba908363ffffffff610a3916565b600160a060020a0380861660009081526002602052604080822093909355908516815220546104ef908363ffffffff610a4b16565b600160a060020a03808516600090815260026020908152604080832094909455878316825260018152838220339093168252919091522054610537908363ffffffff610a3916565b600160a060020a03808616600081815260016020908152604080832033861684529091529081902093909355908516917fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef9085905190815260200160405180910390a35060019392505050565b6000805433600160a060020a039081169116146105c057600080fd5b60045460ff16156105d057600080fd5b6003546105e3908363ffffffff610a4b16565b600355600160a060020a03831660009081526002602052604090205461060f908363ffffffff610a4b16565b600160a060020a0384166000818152600260205260409081902092909255907f0f6798a560793a54c3bcfe86a93cde1e73087d944c0ea20544137d41213968859084905190815260200160405180910390a2600160a060020a03831660007fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef8460405190815260200160405180910390a350600192915050565b600160a060020a0333811660009081526001602090815260408083209386168352929052908120548083111561070657600160a060020a03338116600090815260016020908152604080832093881683529290529081205561073d565b610716818463ffffffff610a3916565b600160a060020a033381166000908152600160209081526040808320938916835292905220555b600160a060020a0333811660008181526001602090815260408083209489168084529490915290819020547f8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925915190815260200160405180910390a35060019392505050565b600160a060020a031660009081526002602052604090205490565b6000805433600160a060020a039081169116146107da57600080fd5b60045460ff16156107ea57600080fd5b6004805460ff191660011790557fae5184fba832cb2b1f702aca6117b8d265eaf03ad33eb133f19dde0f5920fa0860405160405180910390a150600190565b600054600160a060020a031681565b60408051908101604052600381527f544f4b0000000000000000000000000000000000000000000000000000000000602082015281565b6000600160a060020a038316151561088657600080fd5b600160a060020a0333166000908152600260205260409020548211156108ab57600080fd5b600160a060020a0333166000908152600260205260409020546108d4908363ffffffff610a3916565b600160a060020a033381166000908152600260205260408082209390935590851681522054610909908363ffffffff610a4b16565b600160a060020a0380851660008181526002602052604090819020939093559133909116907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef9085905190815260200160405180910390a350600192915050565b600160a060020a0333811660009081526001602090815260408083209386168352929052908120546109a2908363ffffffff610a4b16565b600160a060020a0333811660008181526001602090815260408083209489168084529490915290819020849055919290917f8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b92591905190815260200160405180910390a350600192915050565b600160a060020a03918216600090815260016020908152604080832093909416825291909152205490565b600082821115610a4557fe5b50900390565b600082820183811015610a5a57fe5b93925050505600a165627a7a7230582069f8c037c76de7c279d025631584f6be90ca1ba57c2de246ace1b8c1f2dce76e0029`
 
-var contractAddress = common.HexToAddress("0x53DDd545882dec853226dC8255268C7760276695")
-var daiContractAddress = common.HexToAddress("0x7d2d3073eab94ba50f83a60cea14020f0c906da0")
+var contractAddress = common.HexToAddress("0xd645C13C35141d61f273EDc0F546beF48a48001D")
 var userAddress = common.HexToAddress("0x28074f8D0fD78629CD59290Cac185611a8d60109")
 
 // geth init genesis.json --datadir .datadir
-func initGenesis(genesisPath string) *core.Genesis {
-
-	var genesis core.Genesis
-	databytes, _ := ioutil.ReadFile(genesisPath)
-
-	json.Unmarshal(databytes, &genesis)
-	return &genesis
-}
-
-func printJSON(x interface{}) {
-	b, err := json.MarshalIndent(x, "", "  ")
-	if err != nil {
-		fmt.Println("Error: ", err)
-	}
-
-	fmt.Print(string(b), "\n")
-}
-
-type ContractAdmin struct {
-}
-
-func (c *ContractAdmin) Address() common.Address {
-	return contractAddress
-}
-
-func DumpTrie(trieItem state.Trie) {
-	it := trie.NewIterator(trieItem.NodeIterator(nil))
-	for it.Next() {
-		fmt.Printf("Key: %x, value: %x\n", it.Key, it.Value)
-	}
-}
 
 func main() {
-
 	// privkey, _ := crypto.HexToECDSA("3411b45169aa5a8312e51357db68621031020dcf46011d7431db1bbb6d3922ce")
-	// dataDir := ".data_30100"
+	// datadir := ".data_30100"
 	// stack, _ := demo.NewServiceNodeWithPrivateKeyAndDataDir(privkey, dataDir, 0, 0, 0)
-
-	chainDb, _ := ethdb.NewLDBDatabase("datadir/geth/chaindata", 0, 0)
+	datadir := "datadir/geth/chaindata"
+	// datadir := ".data_30100/main/chaindata"
+	chainDb, _ := ethdb.NewLDBDatabase(datadir, 0, 0)
 	// chainDb, _ := stack.OpenDatabase("chaindata", 0, 0)
 
 	// rootHash := rawdb.ReadCanonicalHash(chainDb, 0)
@@ -77,9 +43,19 @@ func main() {
 
 	headHash := rawdb.ReadHeadBlockHash(chainDb)
 	headerNumber := rawdb.ReadHeaderNumber(chainDb, headHash)
+
+	utils.PrintJSON(headerNumber)
+
+	debug(chainDb, *headerNumber)
+
+}
+
+func debug(chainDb *ethdb.LDBDatabase, number uint64) {
+
+	headHash := rawdb.ReadCanonicalHash(chainDb, number)
+	headerNumber := rawdb.ReadHeaderNumber(chainDb, headHash)
 	block := rawdb.ReadBlock(chainDb, headHash, *headerNumber)
 
-	// utils.PrintJSON(headerNumber)
 	// engine := clique.New(config.Clique, chainDb)
 
 	// vmcfg := vm.Config{EnablePreimageRecording: false}
@@ -113,7 +89,11 @@ func main() {
 	// balance := statedb.GetBalance(userAddress)
 	// fmt.Printf("Balance :%s", balance.String())
 	// statedb.SetBalance(userAddress, balance)
-	debugContract(statedb, contractAddress)
+	if statedb != nil {
+		debugContract(statedb, contractAddress)
+	}
+
+	// utils.PrintJSON(statedb)
 
 	// utils.PrintJSON(dump)
 
@@ -179,16 +159,16 @@ func main() {
 
 func debugContract(statedb *state.StateDB, address common.Address) {
 	dump := statedb.RawDump()
-	// utils.PrintJSON(dump)
-
 	contractData := dump.Accounts[common.Bytes2Hex(address.Bytes())]
 
-	loc := new(big.Int)
-	//balances is 3
-	loc.SetUint64(3)
-	stateValue := statedb.GetState(address, common.BigToHash(loc))
-	balance := new(big.Int)
-	balance.SetBytes(stateValue.Bytes())
+	// utils.PrintJSON(dump)
+
+	// loc := new(big.Int)
+	// //balances is 3
+	// loc.SetUint64(3)
+	// stateValue := statedb.GetState(address, common.BigToHash(loc))
+	// balance := new(big.Int)
+	// balance.SetBytes(stateValue.Bytes())
 
 	fmt.Printf("Storage trie of AE contract:\n")
 
@@ -202,27 +182,58 @@ func debugContract(statedb *state.StateDB, address common.Address) {
 		value := contractData.Storage[key]
 
 		bytesValue := common.Hex2Bytes(value)
-
-		fmt.Printf("Key: %s, value: %x\n", key, bytesValue)
+		var stringValue string
+		var realValue []byte
+		rlp.DecodeBytes(bytesValue, &realValue)
+		rlp.DecodeBytes(bytesValue, &stringValue)
+		//10000000e18
+		bigValue := new(big.Int).SetBytes(realValue).String()
+		if len(bigValue) < 64 {
+			stringValue = bigValue
+		}
+		fmt.Printf("Key: %s, value: %s, realValue :%s\n", key, value, stringValue)
 	}
 
-	bytes := common.Hex2Bytes("28074f8d0fd78629cd59290cac185611a8d60109")
+	// user1Key := common.HexToHash("0xc8b8bc701af04272931d4b3ffdf85ce312518ca4deb328945782007156d13ef3")
+	// user1Key := common.BigToHash(new(big.Int).SetUint64(1))
+	// newuser1Number, _ := new(big.Int).SetString("20000000000000000000000000", 10)
+	// newuser1Value := common.BigToHash(newuser1Number)
+	// statedb.SetState(contractAddress, user1Key, newuser1Value)
+	// value := statedb.GetState(contractAddress, user1Key)
+	// fmt.Printf("Key: %s, value :%s\n", user1Key.String(), value.String())
+
+	// fmt.Printf("index :%x", crypto.Keccak256Hash(new(big.Int).SetUint64(0).Bytes()))
 
 	var i uint64
-	for i = 0; i < 10; i++ {
-		slot := new(big.Int).SetUint64(i).Bytes()
-		printLocation(bytes, slot, &contractData)
+	for i = 0; i < 3; i++ {
+		printValue(i, statedb)
+		// slot := new(big.Int).SetUint64(i).Bytes()
+		printLocation(string(userAddress.Bytes()), fmt.Sprintf("%d", i), statedb)
 	}
 
-	fmt.Printf("balance index: 3, AE balance value :%s\n", balance.String())
 }
 
-func printLocation(bytes []byte, slot []byte, contractData *state.DumpAccount) {
-	var keyBytes []byte
-	keyBytes = append(keyBytes, bytes...)
-	keyBytes = append(keyBytes, slot...)
-	updatedKey := common.Bytes2Hex(crypto.Keccak256Hash(keyBytes).Bytes())
+func printValue(slot uint64, statedb *state.StateDB) {
+	updatedKey := common.BigToHash(new(big.Int).SetUint64(slot))
 	// fmt.Println(bytes, keyBytes)
-	value := contractData.Storage[updatedKey]
-	fmt.Printf("Location: %s, value :%s\n", updatedKey, value)
+	// value := contractData.Storage[common.Bytes2Hex(updatedKey.Bytes())]
+	value := statedb.GetState(contractAddress, updatedKey)
+	fmt.Printf("Location: %s, value :%x\n", updatedKey.String(), value)
+}
+
+func printLocation(bytes string, slot string, statedb *state.StateDB) {
+	// var keyBytes []byte
+	// keyBytes = append(keyBytes, bytes...)
+	// keyBytes = append(keyBytes, slot...)
+
+	// first := new(big.Int).SetBytes(bytes)
+	// added := new(big.Int).SetBytes(slot)
+	// result := math.Add(first, added)
+	// updatedKey := common.BigToHash(result)
+
+	updatedKey := crypto.Keccak256Hash([]byte(bytes + slot))
+	// fmt.Println(keyBytes, slot)
+	// value := contractData.Storage[common.Bytes2Hex(updatedKey.Bytes())]
+	value := statedb.GetState(contractAddress, updatedKey)
+	fmt.Printf("Location: %s, value :%s\n", updatedKey.String(), value)
 }
