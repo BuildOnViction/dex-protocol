@@ -77,7 +77,7 @@ func getKeyStorage(statedb *state.StateDB, address common.Address, methodName st
 
 func getStorage(statedb *state.StateDB, address common.Address, methodName string, input ...common.Hash) (key common.Hash, value interface{}) {
 	key = getKeyStorage(statedb, address, methodName, input...)
-	ret := statedb.GetState(address, key)
+	ret := statedb.GetCommittedState(address, key)
 	method := parsed.Methods[methodName]
 	switch method.Outputs[0].Type.T {
 	case abi.StringTy:
@@ -93,13 +93,15 @@ func setStorage(statedb *state.StateDB, address common.Address, methodName strin
 	key = getKeyStorage(statedb, address, methodName, input...)
 	value = input[len(input)-1]
 	statedb.SetState(address, key, value)
-	statedb.Commit(true)
+	statedb.Commit(false)
+	// return
 	return key, value
 }
 
 func debugContract(statedb *state.StateDB, address common.Address) {
+
 	newName := common.BytesToHash([]byte("TOMO"))
-	key, value := setStorage(statedb, contractAddress, "name", newName)
+	key, value := setStorage(statedb, contractAddress, "symbol", newName)
 	fmt.Printf("key: %s, value :%v\n", key.Hex(), value.Hex())
 
 	for _, methodName := range []string{"name", "symbol", "decimals"} {
