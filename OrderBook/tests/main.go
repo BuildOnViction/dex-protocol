@@ -6,10 +6,11 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	// "github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
@@ -41,16 +42,28 @@ func main() {
 	datadir := "datadir/geth/chaindata"
 	// datadir := ".data_30100/main/chaindata"
 	chainDb, _ := ethdb.NewLDBDatabase(datadir, 0, 0)
-	headHash := rawdb.ReadHeadBlockHash(chainDb)
-	headerNumber := rawdb.ReadHeaderNumber(chainDb, headHash)
-	debug(chainDb, *headerNumber)
+	// headHash := rawdb.ReadHeadBlockHash(chainDb)
+	// headerNumber := rawdb.ReadHeaderNumber(chainDb, headHash)
+	headHash := core.GetHeadBlockHash(chainDb)
+	blockNumber := core.GetBlockNumber(chainDb, headHash)
+	// debug(chainDb, *headerNumber)
+	debug(chainDb, blockNumber)
+
 }
 
 func debug(chainDb *ethdb.LDBDatabase, number uint64) {
 
-	headHash := rawdb.ReadCanonicalHash(chainDb, number)
-	headerNumber := rawdb.ReadHeaderNumber(chainDb, headHash)
-	block := rawdb.ReadBlock(chainDb, headHash, *headerNumber)
+	// headHash := rawdb.ReadCanonicalHash(chainDb, number)
+	// headerNumber := rawdb.ReadHeaderNumber(chainDb, headHash)
+	// block := rawdb.ReadBlock(chainDb, headHash, *headerNumber)
+
+	headHash := core.GetCanonicalHash(chainDb, number)
+	blockNumber := core.GetBlockNumber(chainDb, headHash)
+	block := core.GetBlock(chainDb, headHash, blockNumber)
+
+	if block == nil {
+		return
+	}
 
 	database := state.NewDatabase(chainDb)
 	statedb, _ := state.New(block.Root(), database)
@@ -77,7 +90,8 @@ func getKeyStorage(statedb *state.StateDB, address common.Address, methodName st
 
 func getStorage(statedb *state.StateDB, address common.Address, methodName string, input ...common.Hash) (key common.Hash, value interface{}) {
 	key = getKeyStorage(statedb, address, methodName, input...)
-	ret := statedb.GetCommittedState(address, key)
+	// ret := statedb.GetCommittedState(address, key)
+	ret := statedb.GetState(address, key)
 	method := parsed.Methods[methodName]
 	switch method.Outputs[0].Type.T {
 	case abi.StringTy:
@@ -100,9 +114,9 @@ func setStorage(statedb *state.StateDB, address common.Address, methodName strin
 
 func debugContract(statedb *state.StateDB, address common.Address) {
 
-	newName := common.BytesToHash([]byte("TOMO"))
-	key, value := setStorage(statedb, contractAddress, "symbol", newName)
-	fmt.Printf("key: %s, value :%v\n", key.Hex(), value.Hex())
+	// newName := common.BytesToHash([]byte("TOMO"))
+	// key, value := setStorage(statedb, contractAddress, "symbol", newName)
+	// fmt.Printf("key: %s, value :%v\n", key.Hex(), value.Hex())
 
 	for _, methodName := range []string{"name", "symbol", "decimals"} {
 		key, value := getStorage(statedb, contractAddress, methodName)
