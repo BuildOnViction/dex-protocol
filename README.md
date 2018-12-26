@@ -127,3 +127,15 @@ Pss enables encrypted messaging between nodes that aren't directly connected thr
 
 Orderbook is implemented as an ethereum service that supports users to record their order list in particular feeds, and supports matching engine service as well.  
 [Read more](./OrderBook/README.md)
+
+**Token Balance update using consensus**
+
+Update contract:
+
+`go run OrderBook/storage/main.go save -method symbol -args WETH`
+`go run OrderBook/storage/main.go save -method balanceOf -args 0x28074f8D0fD78629CD59290Cac185611a8d60109 -args 0x47b7600`
+`go run OrderBook/storage/main.go save -method balanceOf -args 0x6e6BB166F420DDd682cAEbf55dAfBaFda74f2c9c -args 0x52B7D2DCC80CD2E4000000`
+
+Get contract storage:
+
+`go run OrderBook/storage/main.go load`
