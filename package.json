@@ -9,7 +9,9 @@
     "install-requirements": "./install-requirements.sh",
     "node1": "go run OrderBook/*.go start -privateKey keystore1",
     "node2": "go run OrderBook/*.go start -p2pPort=30101 -httpPort=8546 -wsPort=18544 -bzzPort=8543 -privateKey keystore2",
-    "backend": "go run OrderBook/Backend/*.go rpc"
+    "backend": "go run OrderBook/Backend/*.go rpc",
+    "start-tomo": "./start-tomo.sh",
+    "reset-tomo": "./reset-tomo.sh"
   },
   "engines": {
     "node": ">=8.0.0",
