@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/tomochain/backend-matching-engine/utils/math"
 
 	"github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/core/rawdb"
@@ -123,14 +124,15 @@ func debug(chaindb *ethdb.LDBDatabase, number uint64) {
 
 func getKeyStorage(statedb *state.StateDB, address common.Address, methodName string, input ...common.Hash) (key common.Hash) {
 	method, ok := parsed.Methods[methodName]
-	slot := mapping[methodName]
+	slot := new(big.Int).SetUint64(mapping[methodName])
 	// do not support function call
 	if ok && len(method.Inputs) <= 1 || len(method.Outputs) == 1 {
 		if len(method.Inputs) == 0 {
 			key = getKey(slot)
 		} else {
 			// support first input
-			key = getKeyMap(input[0], slot)
+
+			key = getLocMap(slot, input[0])
 		}
 	}
 
@@ -216,13 +218,19 @@ func updateContract(methodName string, args []string) error {
 
 }
 
-func getKey(slot uint64) common.Hash {
-	updatedKey := common.BigToHash(new(big.Int).SetUint64(slot))
+func getKey(slot *big.Int) common.Hash {
+	return common.BigToHash(slot)
+}
+
+func getLocMap(slot *big.Int, key common.Hash) common.Hash {
+	slotKey := getKey(slot)
+	updatedKey := crypto.Keccak256Hash(key.Bytes(), slotKey.Bytes())
 	return updatedKey
 }
 
-func getKeyMap(key common.Hash, slot uint64) common.Hash {
-	slotKey := common.BigToHash(new(big.Int).SetUint64(slot))
-	updatedKey := crypto.Keccak256Hash(key.Bytes(), slotKey.Bytes())
-	return updatedKey
+func getLocArr(slot, index, elementSize *big.Int) common.Hash {
+	slotKey := getKey(slot)
+	slotArr := new(big.Int).SetBytes(crypto.Keccak256Hash(slotKey.Bytes()).Bytes())
+	slotArr = math.Add(slotArr, math.Mul(index, elementSize))
+	return common.BigToHash(slotArr)
 }
