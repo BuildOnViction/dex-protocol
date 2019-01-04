@@ -1,13 +1,7 @@
-// Copyright (c) 2015, Emir Pasic. All rights reserved.
+// Copyright (c) 2019, Agiletech Viet Nam. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package redblacktree implements a red-black tree.
-//
-// Used by TreeSet and TreeMap.
-//
-// Structure is not thread safe.
-//
 // References: http://en.wikipedia.org/wiki/Red%E2%80%93black_tree
 package redblacktree
 
@@ -16,54 +10,59 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
 )
-
-type color bool
 
 type Comparator func(a, b []byte) int
+type EncodeToBytes func(*Item) ([]byte, error)
+type DecodeBytes func([]byte, *Item) error
 
-const (
-	black, red color = true, false
-)
+var emptyKey = []byte{}
 
 // Tree holds elements of the red-black tree
 type Tree struct {
-	db   *ethdb.LDBDatabase
-	Root *Node
+	db      *ethdb.LDBDatabase
+	rootKey []byte
 	// size       int
-	Comparator Comparator
+	Comparator    Comparator
+	EncodeToBytes EncodeToBytes
+	DecodeBytes   DecodeBytes
 }
 
 // NewWith instantiates a red-black tree with the custom comparator.
-func NewWith(comparator Comparator, db *ethdb.LDBDatabase) *Tree {
-	return &Tree{Comparator: comparator, db: db}
+func NewWith(comparator Comparator, encode EncodeToBytes, decode DecodeBytes, db *ethdb.LDBDatabase) *Tree {
+	return &Tree{Comparator: comparator, EncodeToBytes: encode, DecodeBytes: decode, db: db}
 }
 
-func NewWithBytesComparator(db *ethdb.LDBDatabase) *Tree {
-	return &Tree{Comparator: bytes.Compare, db: db}
+func NewWithBytesComparator(encode EncodeToBytes, decode DecodeBytes, db *ethdb.LDBDatabase) *Tree {
+	return &Tree{Comparator: bytes.Compare, EncodeToBytes: encode, DecodeBytes: decode, db: db}
 }
 
-func (tree *Tree) SetRoot(key []byte) error {
-	root, err := tree.GetNode(key)
-	tree.Root = root
-	// bytes, _ := json.Marshal(root)
-	// fmt.Println(string(bytes))
-	return err
+func (tree *Tree) Root() *Node {
+	root, _ := tree.GetNode(tree.rootKey)
+	return root
+}
+
+func (tree *Tree) SetRootKey(key []byte) {
+	// root, err := tree.GetNode(key)
+	// tree.Root = root
+	// // bytes, _ := json.Marshal(root)
+	// // fmt.Println(string(bytes))
+	// return err
+	tree.rootKey = key
 }
 
 // Put inserts node into the tree.
 // Key should adhere to the comparator's type assertion, otherwise method panics.
 func (tree *Tree) Put(key []byte, value []byte) {
 	var insertedNode *Node
-	if tree.Root == nil {
+	if tree.emptyKey(tree.rootKey) {
 		// Assert key is of comparator's type for initial tree
 		// tree.Comparator(key, key)
 		item := &Item{Value: value, Color: red, Keys: &KeyMeta{}}
-		tree.Root = &Node{Key: key, Item: item}
-		insertedNode = tree.Root
+		tree.rootKey = key
+		insertedNode = &Node{Key: key, Item: item}
 	} else {
-		node := tree.Root
+		node := tree.Root()
 		loop := true
 		for loop {
 			compare := tree.Comparator(key, node.Key)
@@ -73,10 +72,12 @@ func (tree *Tree) Put(key []byte, value []byte) {
 				node.Key = key
 				item := &Item{Value: value, Keys: &KeyMeta{}}
 				node.Item = item
+				tree.Save(node)
 				return
 			case compare < 0:
 				if tree.emptyKey(node.LeftKey()) {
 					node.LeftKey(key)
+					tree.Save(node)
 					item := &Item{Value: value, Color: red, Keys: &KeyMeta{}}
 					nodeLeft := &Node{Key: key, Item: item}
 					insertedNode = nodeLeft
@@ -88,6 +89,7 @@ func (tree *Tree) Put(key []byte, value []byte) {
 
 				if tree.emptyKey(node.RightKey()) {
 					node.RightKey(key)
+					tree.Save(node)
 					item := &Item{Value: value, Color: red, Keys: &KeyMeta{}}
 					nodeRight := &Node{Key: key, Item: item}
 					insertedNode = nodeRight
@@ -101,14 +103,16 @@ func (tree *Tree) Put(key []byte, value []byte) {
 		}
 
 		insertedNode.ParentKey(node.Key)
-		tree.Save(node)
-		tree.Save(tree.Root)
-		// tree.Save(insertedNode)
+		tree.Save(insertedNode)
+
 		// fmt.Printf("Key :%s %s\n", node, insertedNode)
 	}
 
+	// tree.Save(insertedNode)
 	tree.insertCase1(insertedNode)
+	tree.Save(insertedNode)
 
+	fmt.Println(tree)
 	// tree.size++
 }
 
@@ -119,13 +123,19 @@ func (tree *Tree) GetNode(key []byte) (*Node, error) {
 	// fmt.Printf("key: %s\n", string(key))
 	bytes, err := tree.db.Get(key)
 	if err != nil {
+		fmt.Printf("Key not found :%s", string(key))
 		return nil, err
 	}
 	item := &Item{}
 
-	err = rlp.DecodeBytes(bytes, item)
+	err = tree.DecodeBytes(bytes, item)
 	// err = json.Unmarshal(bytes, item)
 
+	// fmt.Printf("Bytes :%v", item)
+
+	if item.Deleted {
+		return nil, nil
+	}
 	return &Node{Key: key, Item: item}, err
 }
 
@@ -133,7 +143,10 @@ func (tree *Tree) GetNode(key []byte) (*Node, error) {
 // Second return parameter is true if key was found, otherwise false.
 // Key should adhere to the comparator's type assertion, otherwise method panics.
 func (tree *Tree) Get(key []byte) (value []byte, found bool) {
-	node := tree.lookup(key)
+	node, err := tree.lookup(key)
+	if err != nil {
+		return nil, false
+	}
 	if node != nil {
 		return node.Item.Value, true
 	}
@@ -144,10 +157,12 @@ func (tree *Tree) Get(key []byte) (value []byte, found bool) {
 // Key should adhere to the comparator's type assertion, otherwise method panics.
 func (tree *Tree) Remove(key []byte) {
 	var child *Node
-	node := tree.lookup(key)
-	if node == nil {
+	node, err := tree.lookup(key)
+
+	if err != nil || node == nil {
 		return
 	}
+
 	var left, right *Node = nil, nil
 	if !tree.emptyKey(node.LeftKey()) {
 		left = node.Left(tree)
@@ -157,26 +172,36 @@ func (tree *Tree) Remove(key []byte) {
 	}
 
 	if left != nil && right != nil {
-		pred := left.maximumNode(tree)
-		node.Key = pred.Key
-		node.Item = pred.Item
-		node = pred
+		// pred := left.maximumNode(tree)
+		// node.Key = pred.Key
+		// node.Item = pred.Item
+		// node = pred
+		node = left.maximumNode(tree)
 	}
+
 	if left == nil || right == nil {
 		if right == nil {
 			child = left
 		} else {
 			child = right
 		}
+
 		if node.Item.Color == black {
 			node.Item.Color = nodeColor(child)
+			tree.Save(node)
+
 			tree.deleteCase1(node)
+			// fmt.Println("update ", tree, node)
 		}
+
 		tree.replaceNode(node, child)
+
 		if tree.emptyKey(node.ParentKey()) && child != nil {
 			child.Item.Color = black
+			tree.Save(child)
 		}
 	}
+
 	// tree.size--
 }
 
@@ -213,7 +238,7 @@ func (tree *Tree) Remove(key []byte) {
 // Left returns the left-most (min) node or nil if tree is empty.
 func (tree *Tree) Left() *Node {
 	var parent *Node
-	current := tree.Root
+	current := tree.Root()
 	for current != nil {
 		parent = current
 		current = current.Left(tree)
@@ -224,7 +249,7 @@ func (tree *Tree) Left() *Node {
 // Right returns the right-most (max) node or nil if tree is empty.
 func (tree *Tree) Right() *Node {
 	var parent *Node
-	current := tree.Root
+	current := tree.Root()
 	for current != nil {
 		parent = current
 		current = current.Right(tree)
@@ -242,7 +267,7 @@ func (tree *Tree) Right() *Node {
 // Key should adhere to the comparator's type assertion, otherwise method panics.
 func (tree *Tree) Floor(key []byte) (floor *Node, found bool) {
 	found = false
-	node := tree.Root
+	node := tree.Root()
 	for node != nil {
 		compare := tree.Comparator(key, node.Key)
 		switch {
@@ -271,7 +296,7 @@ func (tree *Tree) Floor(key []byte) (floor *Node, found bool) {
 // Key should adhere to the comparator's type assertion, otherwise method panics.
 func (tree *Tree) Ceiling(key []byte) (ceiling *Node, found bool) {
 	found = false
-	node := tree.Root
+	node := tree.Root()
 	for node != nil {
 		compare := tree.Comparator(key, node.Key)
 		switch {
@@ -301,13 +326,16 @@ func (tree *Tree) String() string {
 	str := "RedBlackTree\n"
 
 	// if !tree.Empty() {
-	output(tree, tree.Root, "", true, &str)
+	output(tree, tree.Root(), "", true, &str)
 	// }
 	return str
 }
 
 func output(tree *Tree, node *Node, prefix string, isTail bool, str *string) {
 	// fmt.Printf("Node : %v+\n", node)
+	if node == nil {
+		return
+	}
 	if !tree.emptyKey(node.RightKey()) {
 		newPrefix := prefix
 		if isTail {
@@ -335,10 +363,10 @@ func output(tree *Tree, node *Node, prefix string, isTail bool, str *string) {
 	}
 }
 
-func (tree *Tree) lookup(key []byte) *Node {
-	node, _ := tree.GetNode(key)
-	return node
-	// node := tree.Root
+func (tree *Tree) lookup(key []byte) (*Node, error) {
+
+	return tree.GetNode(key)
+	// node := tree.Root()
 	// for node != nil {
 	// 	compare := tree.Comparator(key, node.Key)
 	// 	switch {
@@ -356,14 +384,16 @@ func (tree *Tree) lookup(key []byte) *Node {
 func (tree *Tree) rotateLeft(node *Node) {
 	right := node.Right(tree)
 	tree.replaceNode(node, right)
-	// fmt.Printf("rotate: right: %s, left: %s\n", node.RightKey(), right.LeftKey())
 	node.RightKey(right.LeftKey())
 	if !tree.emptyKey(right.LeftKey()) {
-		right.Left(tree).ParentKey(node.Key)
+		rightLeft := right.Left(tree)
+		rightLeft.ParentKey(node.Key)
+		tree.Save(rightLeft)
 	}
 	right.LeftKey(node.Key)
-	// tree.Save(right)
 	node.ParentKey(right.Key)
+	tree.Save(node)
+	tree.Save(right)
 }
 
 func (tree *Tree) rotateRight(node *Node) {
@@ -371,47 +401,74 @@ func (tree *Tree) rotateRight(node *Node) {
 	tree.replaceNode(node, left)
 	node.LeftKey(left.RightKey())
 	if !tree.emptyKey(left.RightKey()) {
-		left.Right(tree).ParentKey(node.Key)
+		leftRight := left.Right(tree)
+		leftRight.ParentKey(node.Key)
+		tree.Save(leftRight)
 	}
 	left.RightKey(node.Key)
-	// tree.Save(left)
 	node.ParentKey(left.Key)
+	tree.Save(node)
+	tree.Save(left)
 }
 
 func (tree *Tree) replaceNode(old *Node, new *Node) {
-	if tree.emptyKey(old.ParentKey()) {
-		tree.Root = new
-	} else {
-		parent := old.Parent(tree)
-		fmt.Printf("Update leftkey :%v, %v, %v\n", string(new.Key), string(old.Key), string(parent.Key))
-		if tree.Comparator(old.Key, parent.LeftKey()) == 0 {
 
-			parent.LeftKey(new.Key)
+	newKey := emptyKey
+	if new != nil {
+		newKey = new.Key
+	}
+
+	if tree.emptyKey(old.ParentKey()) {
+		// tree.Root = new
+		tree.rootKey = newKey
+	} else {
+		// update left and right for oldParent
+		oldParent := old.Parent(tree)
+		// if new != nil {
+
+		// fmt.Printf("Update new %v\n", new)
+		// fmt.Printf("Update old parent %v\n", oldParent)
+		if tree.Comparator(old.Key, oldParent.LeftKey()) == 0 {
+			oldParent.LeftKey(newKey)
 		} else {
-			parent.RightKey(new.Key)
+			// remove oldParent right
+			oldParent.RightKey(newKey)
 		}
+		// fmt.Printf("Update old parent %v\n", oldParent)
+		tree.Save(oldParent)
+		// }
+		// fmt.Println("Replace tree node", old, new, oldParent)
 	}
 	if new != nil {
+		// here is the swap, not update key
+		// new.Parent = old.Parent
 		new.ParentKey(old.ParentKey())
+		tree.Save(new)
 	}
+
+	// fmt.Println("Final tree", tree)
+
 }
 
 func (tree *Tree) insertCase1(node *Node) {
 
+	// fmt.Printf("Insert case1 :%s\n", node)
 	if tree.emptyKey(node.ParentKey()) {
 		node.Item.Color = black
 		// store this
-
-		tree.Save(node)
+		// tree.Save(node)
+		// fmt.Println("Breaking case1")
 	} else {
-
 		tree.insertCase2(node)
 	}
 }
 
 func (tree *Tree) insertCase2(node *Node) {
-	if nodeColor(node.Parent(tree)) == black {
-		tree.Save(node)
+	parent := node.Parent(tree)
+	// fmt.Printf("Insert case 2, parent: %s", parent)
+	if nodeColor(parent) == black {
+		// tree.Save(node)
+		// fmt.Println("Breaking case2")
 		return
 	}
 
@@ -419,23 +476,26 @@ func (tree *Tree) insertCase2(node *Node) {
 }
 
 func (tree *Tree) insertCase3(node *Node) {
-	uncle := node.uncle(tree)
 	parent := node.Parent(tree)
+	uncle := node.uncle(tree)
 	grandparent := node.grandparent(tree)
+	// fmt.Printf("Insert case 3, uncle: %s\n", uncle)
 	if nodeColor(uncle) == red {
 		parent.Item.Color = black
 		uncle.Item.Color = black
 		tree.Save(uncle)
+		// tree.Save(parent)
 		grandparent.Item.Color = red
 		tree.insertCase1(grandparent)
+		tree.Save(grandparent)
 	} else {
-		tree.insertCase4(node, parent, grandparent)
+		tree.insertCase4(node)
 	}
 }
 
-func (tree *Tree) insertCase4(node, parent, grandparent *Node) {
-	// grandparent := node.grandparent(tree)
-	// parent := node.Parent(tree)
+func (tree *Tree) insertCase4(node *Node) {
+	grandparent := node.grandparent(tree)
+	parent := node.Parent(tree)
 	if tree.Comparator(node.Key, parent.RightKey()) == 0 &&
 		tree.Comparator(parent.Key, grandparent.LeftKey()) == 0 {
 		tree.rotateLeft(parent)
@@ -446,47 +506,37 @@ func (tree *Tree) insertCase4(node, parent, grandparent *Node) {
 		node = node.Right(tree)
 	}
 
-	tree.insertCase5(node, parent, grandparent)
+	tree.insertCase5(node)
 }
 
-func (tree *Tree) insertCase5(node, parent, grandparent *Node) {
-	// parent := node.Parent(tree)
+func (tree *Tree) insertCase5(node *Node) {
+	grandparent := node.grandparent(tree)
+	parent := node.Parent(tree)
 	parent.Item.Color = black
-	// grandparent := node.grandparent(tree)
 	grandparent.Item.Color = red
+	tree.Save(parent)
+	tree.Save(grandparent)
+	// fmt.Printf("insertCase5 :%s | %s | %s | %s \n", node.Key, parent.LeftKey(), parent, grandparent.LeftKey())
+	// fmt.Printf("insertCase5 :%s | %s \n", parent.RightKey(), grandparent.Right(tree))
+
 	if tree.Comparator(node.Key, parent.LeftKey()) == 0 &&
 		tree.Comparator(parent.Key, grandparent.LeftKey()) == 0 {
 		tree.rotateRight(grandparent)
 	} else if tree.Comparator(node.Key, parent.RightKey()) == 0 &&
 		tree.Comparator(parent.Key, grandparent.RightKey()) == 0 {
-
-		// if string(node.Key) == "5" {
-		// 	fmt.Println(tree)
-		// }
-
 		tree.rotateLeft(grandparent)
-
-		// if string(node.Key) == "5" {
-		// 	fmt.Println(tree)
-		// }
 	}
-	tree.Save(parent)
-	tree.Save(grandparent)
-
-	// if string(node.Key) == "5" {
-	// fmt.Println(node)
-	// }
 
 }
 
 func (tree *Tree) Save(node *Node) error {
 	// value, err := json.Marshal(node.Item)
-	value, err := rlp.EncodeToBytes(node.Item)
+	value, err := tree.EncodeToBytes(node.Item)
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
-
+	fmt.Printf("Save %s, value :%x\n", node.Key, value)
 	return tree.db.Put(node.Key, value)
 }
 
@@ -502,53 +552,73 @@ func (tree *Tree) deleteCase1(node *Node) {
 }
 
 func (tree *Tree) deleteCase2(node *Node) {
+	parent := node.Parent(tree)
 	sibling := node.sibling(tree)
+
 	if nodeColor(sibling) == red {
-		parent := node.Parent(tree)
 		parent.Item.Color = red
 		sibling.Item.Color = black
+		tree.Save(parent)
+		tree.Save(sibling)
 		if tree.Comparator(node.Key, parent.LeftKey()) == 0 {
 			tree.rotateLeft(parent)
 		} else {
 			tree.rotateRight(parent)
 		}
 	}
+
 	tree.deleteCase3(node)
 }
 
 func (tree *Tree) deleteCase3(node *Node) {
-	sibling := node.sibling(tree)
+
 	parent := node.Parent(tree)
+	sibling := node.sibling(tree)
+	siblingLeft := sibling.Left(tree)
+	siblingRight := sibling.Right(tree)
+
 	if nodeColor(parent) == black &&
 		nodeColor(sibling) == black &&
-		nodeColor(sibling.Left(tree)) == black &&
-		nodeColor(sibling.Right(tree)) == black {
+		nodeColor(siblingLeft) == black &&
+		nodeColor(siblingRight) == black {
 		sibling.Item.Color = red
+		tree.Save(sibling)
 		tree.deleteCase1(parent)
+
+		fmt.Println("delete node", string(node.Key), parent)
+
+		tree.deleteNode(node, false)
+
 	} else {
 		tree.deleteCase4(node)
 	}
+
 }
 
 func (tree *Tree) deleteCase4(node *Node) {
-	sibling := node.sibling(tree)
 	parent := node.Parent(tree)
+	sibling := node.sibling(tree)
+	siblingLeft := sibling.Left(tree)
+	siblingRight := sibling.Right(tree)
+
 	if nodeColor(parent) == red &&
 		nodeColor(sibling) == black &&
-		nodeColor(sibling.Left(tree)) == black &&
-		nodeColor(sibling.Right(tree)) == black {
+		nodeColor(siblingLeft) == black &&
+		nodeColor(siblingRight) == black {
 		sibling.Item.Color = red
 		parent.Item.Color = black
+		tree.Save(sibling)
+		tree.Save(parent)
 	} else {
 		tree.deleteCase5(node)
 	}
 }
 
 func (tree *Tree) deleteCase5(node *Node) {
+	parent := node.Parent(tree)
 	sibling := node.sibling(tree)
 	siblingLeft := sibling.Left(tree)
 	siblingRight := sibling.Right(tree)
-	parent := node.Parent(tree)
 
 	if tree.Comparator(node.Key, parent.LeftKey()) == 0 &&
 		nodeColor(sibling) == black &&
@@ -556,40 +626,83 @@ func (tree *Tree) deleteCase5(node *Node) {
 		nodeColor(siblingRight) == black {
 		sibling.Item.Color = red
 		siblingLeft.Item.Color = black
+
+		tree.Save(sibling)
+		tree.Save(siblingLeft)
+
 		tree.rotateRight(sibling)
+
 	} else if tree.Comparator(node.Key, parent.RightKey()) == 0 &&
 		nodeColor(sibling) == black &&
 		nodeColor(siblingRight) == red &&
 		nodeColor(siblingLeft) == black {
 		sibling.Item.Color = red
 		siblingRight.Item.Color = black
+
+		tree.Save(sibling)
+		tree.Save(siblingRight)
+
 		tree.rotateLeft(sibling)
+
 	}
+
 	tree.deleteCase6(node)
 }
 
 func (tree *Tree) deleteCase6(node *Node) {
+	parent := node.Parent(tree)
 	sibling := node.sibling(tree)
 	siblingLeft := sibling.Left(tree)
 	siblingRight := sibling.Right(tree)
-	parent := node.Parent(tree)
+
 	sibling.Item.Color = nodeColor(parent)
 	parent.Item.Color = black
+
+	tree.Save(sibling)
+	tree.Save(parent)
+
+	fmt.Println("before-update ", tree, sibling, parent, siblingLeft, siblingRight)
+
 	if tree.Comparator(node.Key, parent.LeftKey()) == 0 && nodeColor(siblingRight) == red {
 		siblingRight.Item.Color = black
+		tree.Save(siblingRight)
 		tree.rotateLeft(parent)
+		// parent.LeftKey(emptyKey)
 	} else if nodeColor(siblingLeft) == red {
 		siblingLeft.Item.Color = black
+		tree.Save(siblingLeft)
 		tree.rotateRight(parent)
+		// parent.RightKey(emptyKey)
 	}
 
-	// delete from db
-	tree.db.Delete(node.Key)
+	// update the parent meta then delete the current node from db
+	// tree.Save(parent)
+	tree.deleteNode(node, false)
+	fmt.Println("update ", tree, parent, sibling)
 }
 
-func nodeColor(node *Node) color {
+func nodeColor(node *Node) bool {
 	if node == nil {
 		return black
 	}
 	return node.Item.Color
+}
+
+func (tree *Tree) deleteNode(node *Node, force bool) {
+	// update parent
+	// parent := node.Parent(tree)
+	// fmt.Println("Update parent", parent, "Delete node", node)
+	// if tree.Comparator(node.Key, parent.LeftKey()) == 0 {
+	// 	parent.LeftKey(emptyKey)
+	// } else {
+	// 	parent.RightKey(emptyKey)
+	// }
+	// tree.Save(parent)
+
+	if force {
+		tree.db.Delete(node.Key)
+	} else {
+		node.Item.Deleted = true
+		tree.Save(node)
+	}
 }

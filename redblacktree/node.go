@@ -1,7 +1,15 @@
+// Copyright (c) 2019, Agiletech Viet Nam. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package redblacktree
 
 import (
 	"fmt"
+)
+
+const (
+	black, red bool = true, false
 )
 
 type KeyMeta struct {
@@ -10,14 +18,22 @@ type KeyMeta struct {
 	Parent []byte
 }
 
+func formatBytes(key []byte) string {
+	if len(key) == 0 || key == nil {
+		return "<nil>"
+	}
+	return string(key)
+}
+
 func (keys *KeyMeta) String() string {
-	return fmt.Sprintf("L: %v, P: %v, R: %v", string(keys.Left), string(keys.Parent), string(keys.Right))
+	return fmt.Sprintf("L: %v, P: %v, R: %v", formatBytes(keys.Left), formatBytes(keys.Parent), formatBytes(keys.Right))
 }
 
 type Item struct {
-	Keys  *KeyMeta
-	Value []byte
-	Color color
+	Keys    *KeyMeta
+	Value   []byte
+	Deleted bool
+	Color   bool
 }
 
 // Node is a single element within the tree
@@ -27,6 +43,9 @@ type Node struct {
 }
 
 func (node *Node) String() string {
+	if node == nil {
+		return "<nil>"
+	}
 	return fmt.Sprintf("%v -> %v, (%v)\n", string(node.Key), string(node.Value()), node.Item.Keys.String())
 }
 
@@ -34,14 +53,14 @@ func (node *Node) maximumNode(tree *Tree) *Node {
 	if node == nil {
 		return nil
 	}
-	for node.Item.Keys.Right != nil {
+	for !tree.emptyKey(node.RightKey()) {
 		node = node.Right(tree)
 	}
 	return node
 }
 
 func (node *Node) LeftKey(keys ...[]byte) []byte {
-	if node.Item == nil || node.Item.Keys == nil {
+	if node == nil || node.Item == nil || node.Item.Keys == nil {
 		return nil
 	}
 	if len(keys) == 1 {
@@ -52,13 +71,16 @@ func (node *Node) LeftKey(keys ...[]byte) []byte {
 }
 
 func (node *Node) RightKey(keys ...[]byte) []byte {
-	if node.Item == nil || node.Item.Keys == nil {
+	if node == nil || node.Item == nil || node.Item.Keys == nil {
 		return nil
 	}
 	if len(keys) == 1 {
-		if string(node.Item.Keys.Right) == "3" {
-			fmt.Printf("RightKey :%s\n", keys[0])
-		}
+		// if string(node.Key) == "1" {
+		// 	fmt.Printf("Update right key: %s\n", string(keys[0]))
+		// if string(keys[0]) == "3" {
+		// 	panic("should stops")
+		// }
+		// }
 		node.Item.Keys.Right = keys[0]
 	}
 
@@ -66,7 +88,7 @@ func (node *Node) RightKey(keys ...[]byte) []byte {
 }
 
 func (node *Node) ParentKey(keys ...[]byte) []byte {
-	if node.Item == nil || node.Item.Keys == nil {
+	if node == nil || node.Item == nil || node.Item.Keys == nil {
 		return nil
 	}
 	if len(keys) == 1 {
@@ -78,6 +100,7 @@ func (node *Node) ParentKey(keys ...[]byte) []byte {
 
 func (node *Node) Left(tree *Tree) *Node {
 	key := node.LeftKey()
+
 	node, err := tree.GetNode(key)
 	if err != nil {
 		fmt.Println(err)
@@ -109,26 +132,31 @@ func (node *Node) Value() []byte {
 }
 
 func (node *Node) grandparent(tree *Tree) *Node {
-	if node != nil && node.Item.Keys.Parent != nil {
+	if node != nil && !tree.emptyKey(node.ParentKey()) {
 		return node.Parent(tree).Parent(tree)
 	}
 	return nil
 }
 
 func (node *Node) uncle(tree *Tree) *Node {
-	if node == nil || node.Item.Keys.Parent == nil || node.Parent(tree).Item.Keys.Parent == nil {
-		return nil
-	}
-	return node.Parent(tree).sibling(tree)
-}
-
-func (node *Node) sibling(tree *Tree) *Node {
-	if node == nil || node.Item.Keys.Parent == nil {
+	if node == nil || tree.emptyKey(node.ParentKey()) {
 		return nil
 	}
 	parent := node.Parent(tree)
+	// if tree.emptyKey(parent.ParentKey()) {
+	// 	return nil
+	// }
 
-	if tree.Comparator(node.Key, parent.Item.Keys.Left) == 0 {
+	return parent.sibling(tree)
+}
+
+func (node *Node) sibling(tree *Tree) *Node {
+	if node == nil || tree.emptyKey(node.ParentKey()) {
+		return nil
+	}
+	parent := node.Parent(tree)
+	// fmt.Printf("Parent: %s\n", parent)
+	if tree.Comparator(node.Key, parent.LeftKey()) == 0 {
 		return parent.Right(tree)
 	}
 	return parent.Left(tree)

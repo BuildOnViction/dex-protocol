@@ -32,6 +32,7 @@ func (tree *RedBlackTreeExtended) GetMax() (value interface{}, found bool) {
 // RemoveMin removes the min value and flag if found
 func (tree *RedBlackTreeExtended) RemoveMin() (value interface{}, deleted bool) {
 	node, found := tree.getMinFromNode(tree.Root)
+	fmt.Println("found min", node)
 	if found {
 		tree.Remove(node.Key)
 		return node.Value, found
@@ -41,7 +42,9 @@ func (tree *RedBlackTreeExtended) RemoveMin() (value interface{}, deleted bool) 
 
 // RemoveMax removes the max value and flag if found
 func (tree *RedBlackTreeExtended) RemoveMax() (value interface{}, deleted bool) {
+	fmt.Println("found max with root", tree.Root)
 	node, found := tree.getMaxFromNode(tree.Root)
+	fmt.Println("found max", node)
 	if found {
 		tree.Remove(node.Key)
 		return node.Value, found

@@ -1,3 +1,7 @@
+// Copyright (c) 2019, Agiletech Viet Nam. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package redblacktree
 
 // RedBlackTreeExtended to demonstrate how to extend a RedBlackTree to include new functions
@@ -7,7 +11,7 @@ type RedBlackTreeExtended struct {
 
 // GetMin gets the min value and flag if found
 func (tree *RedBlackTreeExtended) GetMin() (value []byte, found bool) {
-	node, found := tree.getMinFromNode(tree.Root)
+	node, found := tree.getMinFromNode(tree.Root())
 	if node != nil {
 		return node.Value(), found
 	}
@@ -16,7 +20,7 @@ func (tree *RedBlackTreeExtended) GetMin() (value []byte, found bool) {
 
 // GetMax gets the max value and flag if found
 func (tree *RedBlackTreeExtended) GetMax() (value []byte, found bool) {
-	node, found := tree.getMaxFromNode(tree.Root)
+	node, found := tree.getMaxFromNode(tree.Root())
 	if node != nil {
 		return node.Value(), found
 	}
@@ -25,7 +29,8 @@ func (tree *RedBlackTreeExtended) GetMax() (value []byte, found bool) {
 
 // RemoveMin removes the min value and flag if found
 func (tree *RedBlackTreeExtended) RemoveMin() (value []byte, deleted bool) {
-	node, found := tree.getMinFromNode(tree.Root)
+	node, found := tree.getMinFromNode(tree.Root())
+	// fmt.Println("found min", node)
 	if found {
 		tree.Remove(node.Key)
 		return node.Value(), found
@@ -35,7 +40,9 @@ func (tree *RedBlackTreeExtended) RemoveMin() (value []byte, deleted bool) {
 
 // RemoveMax removes the max value and flag if found
 func (tree *RedBlackTreeExtended) RemoveMax() (value []byte, deleted bool) {
-	node, found := tree.getMaxFromNode(tree.Root)
+	// fmt.Println("found max with root", tree.Root())
+	node, found := tree.getMaxFromNode(tree.Root())
+	// fmt.Println("found max", node)
 	if found {
 		tree.Remove(node.Key)
 		return node.Value(), found
