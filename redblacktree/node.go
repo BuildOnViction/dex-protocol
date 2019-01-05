@@ -18,15 +18,9 @@ type KeyMeta struct {
 	Parent []byte
 }
 
-func formatBytes(key []byte) string {
-	if len(key) == 0 || key == nil {
-		return "<nil>"
-	}
-	return string(key)
-}
-
-func (keys *KeyMeta) String() string {
-	return fmt.Sprintf("L: %v, P: %v, R: %v", formatBytes(keys.Left), formatBytes(keys.Parent), formatBytes(keys.Right))
+func (keys *KeyMeta) String(tree *Tree) string {
+	return fmt.Sprintf("L: %v, P: %v, R: %v", tree.FormatBytes(keys.Left),
+		tree.FormatBytes(keys.Parent), tree.FormatBytes(keys.Right))
 }
 
 type Item struct {
@@ -42,18 +36,18 @@ type Node struct {
 	Item *Item
 }
 
-func (node *Node) String() string {
+func (node *Node) String(tree *Tree) string {
 	if node == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("%v -> %v, (%v)\n", string(node.Key), string(node.Value()), node.Item.Keys.String())
+	return fmt.Sprintf("%v -> %v, (%v)\n", tree.FormatBytes(node.Key), string(node.Value()), node.Item.Keys.String(tree))
 }
 
 func (node *Node) maximumNode(tree *Tree) *Node {
 	if node == nil {
 		return nil
 	}
-	for !tree.emptyKey(node.RightKey()) {
+	for !tree.isEmptyKey(node.RightKey()) {
 		node = node.Right(tree)
 	}
 	return node
@@ -132,18 +126,18 @@ func (node *Node) Value() []byte {
 }
 
 func (node *Node) grandparent(tree *Tree) *Node {
-	if node != nil && !tree.emptyKey(node.ParentKey()) {
+	if node != nil && !tree.isEmptyKey(node.ParentKey()) {
 		return node.Parent(tree).Parent(tree)
 	}
 	return nil
 }
 
 func (node *Node) uncle(tree *Tree) *Node {
-	if node == nil || tree.emptyKey(node.ParentKey()) {
+	if node == nil || tree.isEmptyKey(node.ParentKey()) {
 		return nil
 	}
 	parent := node.Parent(tree)
-	// if tree.emptyKey(parent.ParentKey()) {
+	// if tree.isEmptyKey(parent.ParentKey()) {
 	// 	return nil
 	// }
 
@@ -151,7 +145,7 @@ func (node *Node) uncle(tree *Tree) *Node {
 }
 
 func (node *Node) sibling(tree *Tree) *Node {
-	if node == nil || tree.emptyKey(node.ParentKey()) {
+	if node == nil || tree.isEmptyKey(node.ParentKey()) {
 		return nil
 	}
 	parent := node.Parent(tree)

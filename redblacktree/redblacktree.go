@@ -9,32 +9,59 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+)
+
+const (
+	itemCacheLimit = 1024
 )
 
 type Comparator func(a, b []byte) int
 type EncodeToBytes func(*Item) ([]byte, error)
 type DecodeBytes func([]byte, *Item) error
-
-var emptyKey = []byte{}
+type FormatBytes func([]byte) string
 
 // Tree holds elements of the red-black tree
 type Tree struct {
-	db      *ethdb.LDBDatabase
+	db *ethdb.LDBDatabase
+	// batch   ethdb.Batch
 	rootKey []byte
+	cache   map[string]*Item
+	// itemCache *lru.Cache // Cache for the recent node item
 	// size       int
 	Comparator    Comparator
 	EncodeToBytes EncodeToBytes
 	DecodeBytes   DecodeBytes
+	FormatBytes   FormatBytes
+	EmptyKey      []byte
 }
 
 // NewWith instantiates a red-black tree with the custom comparator.
-func NewWith(comparator Comparator, encode EncodeToBytes, decode DecodeBytes, db *ethdb.LDBDatabase) *Tree {
-	return &Tree{Comparator: comparator, EncodeToBytes: encode, DecodeBytes: decode, db: db}
+func NewWith(comparator Comparator, encode EncodeToBytes, decode DecodeBytes, emptyKey []byte, db *ethdb.LDBDatabase) *Tree {
+	// itemCache, _ := lru.New(itemCacheLimit)
+	tree := &Tree{
+		Comparator:    comparator,
+		EncodeToBytes: encode,
+		DecodeBytes:   decode,
+		EmptyKey:      emptyKey,
+		db:            db,
+		// itemCache:     itemCache,
+	}
+
+	// tree.batch = tree.db.NewBatch()
+	tree.cache = make(map[string]*Item)
+	return tree
 }
 
-func NewWithBytesComparator(encode EncodeToBytes, decode DecodeBytes, db *ethdb.LDBDatabase) *Tree {
-	return &Tree{Comparator: bytes.Compare, EncodeToBytes: encode, DecodeBytes: decode, db: db}
+func NewWithBytesComparator(encode EncodeToBytes, decode DecodeBytes, emptyKey []byte, db *ethdb.LDBDatabase) *Tree {
+	return NewWith(
+		bytes.Compare,
+		encode,
+		decode,
+		emptyKey,
+		db,
+	)
 }
 
 func (tree *Tree) Root() *Node {
@@ -55,7 +82,7 @@ func (tree *Tree) SetRootKey(key []byte) {
 // Key should adhere to the comparator's type assertion, otherwise method panics.
 func (tree *Tree) Put(key []byte, value []byte) {
 	var insertedNode *Node
-	if tree.emptyKey(tree.rootKey) {
+	if tree.isEmptyKey(tree.rootKey) {
 		// Assert key is of comparator's type for initial tree
 		// tree.Comparator(key, key)
 		item := &Item{Value: value, Color: red, Keys: &KeyMeta{}}
@@ -75,7 +102,7 @@ func (tree *Tree) Put(key []byte, value []byte) {
 				tree.Save(node)
 				return
 			case compare < 0:
-				if tree.emptyKey(node.LeftKey()) {
+				if tree.isEmptyKey(node.LeftKey()) {
 					node.LeftKey(key)
 					tree.Save(node)
 					item := &Item{Value: value, Color: red, Keys: &KeyMeta{}}
@@ -87,7 +114,7 @@ func (tree *Tree) Put(key []byte, value []byte) {
 				}
 			case compare > 0:
 
-				if tree.emptyKey(node.RightKey()) {
+				if tree.isEmptyKey(node.RightKey()) {
 					node.RightKey(key)
 					tree.Save(node)
 					item := &Item{Value: value, Color: red, Keys: &KeyMeta{}}
@@ -117,21 +144,29 @@ func (tree *Tree) Put(key []byte, value []byte) {
 }
 
 func (tree *Tree) GetNode(key []byte) (*Node, error) {
-	if tree.emptyKey(key) {
+	if tree.isEmptyKey(key) {
 		return nil, nil
 	}
 	// fmt.Printf("key: %s\n", string(key))
-	bytes, err := tree.db.Get(key)
-	if err != nil {
-		fmt.Printf("Key not found :%s", string(key))
-		return nil, err
+	cacheKey := fmt.Sprintf("%x", key)
+	var err error
+	var item *Item
+
+	// if cached, ok := tree.itemCache.Get(cacheKey); ok {
+	if cached, ok := tree.cache[cacheKey]; ok {
+		item = cached
+	} else {
+		bytes, err := tree.db.Get(key)
+		if err != nil {
+			fmt.Printf("Key not found :%s", string(key))
+			return nil, err
+		}
+		item = &Item{}
+		err = tree.DecodeBytes(bytes, item)
+		// err = json.Unmarshal(bytes, item)
+
+		// fmt.Printf("Bytes :%v", item)
 	}
-	item := &Item{}
-
-	err = tree.DecodeBytes(bytes, item)
-	// err = json.Unmarshal(bytes, item)
-
-	// fmt.Printf("Bytes :%v", item)
 
 	if item.Deleted {
 		return nil, nil
@@ -164,10 +199,10 @@ func (tree *Tree) Remove(key []byte) {
 	}
 
 	var left, right *Node = nil, nil
-	if !tree.emptyKey(node.LeftKey()) {
+	if !tree.isEmptyKey(node.LeftKey()) {
 		left = node.Left(tree)
 	}
-	if !tree.emptyKey(node.RightKey()) {
+	if !tree.isEmptyKey(node.RightKey()) {
 		right = node.Right(tree)
 	}
 
@@ -196,7 +231,7 @@ func (tree *Tree) Remove(key []byte) {
 
 		tree.replaceNode(node, child)
 
-		if tree.emptyKey(node.ParentKey()) && child != nil {
+		if tree.isEmptyKey(node.ParentKey()) && child != nil {
 			child.Item.Color = black
 			tree.Save(child)
 		}
@@ -336,7 +371,7 @@ func output(tree *Tree, node *Node, prefix string, isTail bool, str *string) {
 	if node == nil {
 		return
 	}
-	if !tree.emptyKey(node.RightKey()) {
+	if !tree.isEmptyKey(node.RightKey()) {
 		newPrefix := prefix
 		if isTail {
 			newPrefix += "│   "
@@ -351,8 +386,14 @@ func output(tree *Tree, node *Node, prefix string, isTail bool, str *string) {
 	} else {
 		*str += "┌── "
 	}
-	*str += node.String() + "\n"
-	if !tree.emptyKey(node.LeftKey()) {
+
+	if tree.FormatBytes != nil {
+		*str += node.String(tree) + "\n"
+	} else {
+		*str += string(node.Key) + "\n"
+	}
+
+	if !tree.isEmptyKey(node.LeftKey()) {
 		newPrefix := prefix
 		if isTail {
 			newPrefix += "    "
@@ -385,7 +426,7 @@ func (tree *Tree) rotateLeft(node *Node) {
 	right := node.Right(tree)
 	tree.replaceNode(node, right)
 	node.RightKey(right.LeftKey())
-	if !tree.emptyKey(right.LeftKey()) {
+	if !tree.isEmptyKey(right.LeftKey()) {
 		rightLeft := right.Left(tree)
 		rightLeft.ParentKey(node.Key)
 		tree.Save(rightLeft)
@@ -400,7 +441,7 @@ func (tree *Tree) rotateRight(node *Node) {
 	left := node.Left(tree)
 	tree.replaceNode(node, left)
 	node.LeftKey(left.RightKey())
-	if !tree.emptyKey(left.RightKey()) {
+	if !tree.isEmptyKey(left.RightKey()) {
 		leftRight := left.Right(tree)
 		leftRight.ParentKey(node.Key)
 		tree.Save(leftRight)
@@ -413,12 +454,12 @@ func (tree *Tree) rotateRight(node *Node) {
 
 func (tree *Tree) replaceNode(old *Node, new *Node) {
 
-	newKey := emptyKey
+	newKey := tree.EmptyKey
 	if new != nil {
 		newKey = new.Key
 	}
 
-	if tree.emptyKey(old.ParentKey()) {
+	if tree.isEmptyKey(old.ParentKey()) {
 		// tree.Root = new
 		tree.rootKey = newKey
 	} else {
@@ -453,7 +494,7 @@ func (tree *Tree) replaceNode(old *Node, new *Node) {
 func (tree *Tree) insertCase1(node *Node) {
 
 	// fmt.Printf("Insert case1 :%s\n", node)
-	if tree.emptyKey(node.ParentKey()) {
+	if tree.isEmptyKey(node.ParentKey()) {
 		node.Item.Color = black
 		// store this
 		// tree.Save(node)
@@ -529,23 +570,53 @@ func (tree *Tree) insertCase5(node *Node) {
 
 }
 
-func (tree *Tree) Save(node *Node) error {
+func (tree *Tree) Save(node *Node) {
 	// value, err := json.Marshal(node.Item)
-	value, err := tree.EncodeToBytes(node.Item)
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-	fmt.Printf("Save %s, value :%x\n", node.Key, value)
-	return tree.db.Put(node.Key, value)
+	cacheKey := fmt.Sprintf("%x", node.Key)
+	// if !tree.itemCache.Contains(cacheKey) {
+	// 	tree.itemCache.Add(cacheKey, node.Item)
+	// }
+
+	// just update cache without hitting the leveldb
+	tree.cache[cacheKey] = node.Item
+
+	// go func() {
+	// 	value, err := tree.EncodeToBytes(node.Item)
+	// 	if err != nil {
+	// 		fmt.Println(err)
+	// 		return
+	// 	}
+	// 	tree.batch.Put(node.Key, value)
+	// 	fmt.Printf("Save %x, value :%x\n", node.Key, value)
+	// }()
+
+	// return tree.db.Put(node.Key, value)
 }
 
-func (tree *Tree) emptyKey(key []byte) bool {
-	return key == nil || len(key) == 0
+func (tree *Tree) Commit() error {
+	// return tree.batch.Write()
+	batch := tree.db.NewBatch()
+	for cacheKey, item := range tree.cache {
+		value, err := tree.EncodeToBytes(item)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		key := common.Hex2Bytes(cacheKey)
+		batch.Put(key, value)
+		fmt.Printf("Save %x, value :%x\n", key, value)
+	}
+	// commit then reset cache
+	tree.cache = make(map[string]*Item)
+	return batch.Write()
+}
+
+func (tree *Tree) isEmptyKey(key []byte) bool {
+	return key == nil || len(key) == 0 || tree.Comparator(key, tree.EmptyKey) == 0
 }
 
 func (tree *Tree) deleteCase1(node *Node) {
-	if tree.emptyKey(node.ParentKey()) {
+	if tree.isEmptyKey(node.ParentKey()) {
 		return
 	}
 	tree.deleteCase2(node)
