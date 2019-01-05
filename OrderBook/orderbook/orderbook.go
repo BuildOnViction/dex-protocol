@@ -60,6 +60,11 @@ func NewOrderBook(datadir string) *OrderBook {
 }
 
 func (orderbook *OrderBook) Save() error {
+
+	// commit price tree first
+	orderbook.Asks.PriceTree.Commit()
+	orderbook.Bids.PriceTree.Commit()
+
 	batch := orderbook.db.NewBatch()
 
 	asksBytes, _ := rlp.EncodeToBytes(orderbook.Asks.Item)
