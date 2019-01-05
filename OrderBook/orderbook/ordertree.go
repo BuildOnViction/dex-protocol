@@ -131,10 +131,8 @@ func (orderTree *OrderTree) PriceList(price decimal.Decimal) *OrderList {
 // CreatePrice : create new price list into PriceTree and PriceMap
 func (orderTree *OrderTree) CreatePrice(price decimal.Decimal) {
 	orderTree.Item.Depth++
-	newList := NewOrderList(price)
+	newList := NewOrderList(price, orderTree)
 	// orderTree.PriceTree.Put(price, newList)
-	newList.orderTree = orderTree
-
 	newList.Save()
 	// orderTree.PriceMap[price.String()] = newList
 }

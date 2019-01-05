@@ -4,6 +4,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+var testOrderTree = NewOrderTree("../datadir/testing")
+
 var testTimestamp = 123452342343
 var testQuanity, _ = decimal.NewFromString("0.1")
 var testPrice, _ = decimal.NewFromString("0.1")

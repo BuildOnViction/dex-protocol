@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewOrderList(t *testing.T) {
-	orderList := NewOrderList(testPrice)
+	orderList := NewOrderList(testPrice, testOrderTree)
 
 	if !(orderList.Item.Length == 0) {
 		t.Errorf("Orderlist length incorrect, got: %d, want: %d.", orderList.Item.Length, 0)
@@ -25,7 +25,7 @@ func TestNewOrderList(t *testing.T) {
 }
 
 func TestOrderList(t *testing.T) {
-	orderList := NewOrderList(testPrice)
+	orderList := NewOrderList(testPrice, testOrderTree)
 
 	dummyOrder := make(map[string]string)
 	dummyOrder["timestamp"] = strconv.Itoa(testTimestamp)

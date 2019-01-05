@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewOrder(t *testing.T) {
-	var orderList OrderList
+
 	dummyOrder := make(map[string]string)
 	dummyOrder["timestamp"] = strconv.Itoa(testTimestamp)
 	dummyOrder["quantity"] = testQuanity.String()
@@ -41,7 +41,7 @@ func TestNewOrder(t *testing.T) {
 }
 
 func TestOrder(t *testing.T) {
-	orderList := NewOrderList(testPrice)
+	orderList := NewOrderList(testPrice, testOrderTree)
 
 	dummyOrder := make(map[string]string)
 	dummyOrder["timestamp"] = strconv.Itoa(testTimestamp)

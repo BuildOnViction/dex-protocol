@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewOrderTree(t *testing.T) {
-	orderTree := NewOrderTree()
+	orderTree := testOrderTree
 
 	dummyOrder := make(map[string]string)
 	dummyOrder["timestamp"] = strconv.Itoa(testTimestamp)
@@ -38,13 +38,13 @@ func TestNewOrderTree(t *testing.T) {
 	dummyOrder3["order_id"] = strconv.Itoa(testOrderID3)
 	dummyOrder3["trade_id"] = strconv.Itoa(testTradeID3)
 
-	if !(orderTree.Volume.Equal(decimal.Zero)) {
-		t.Errorf("orderTree.Volume incorrect, got: %d, want: %d.", orderTree.Volume, decimal.Zero)
+	if !(orderTree.Item.Volume.Equal(decimal.Zero)) {
+		t.Errorf("orderTree.Volume incorrect, got: %d, want: %d.", orderTree.Item.Volume, decimal.Zero)
 	}
 
-	if !(orderTree.Length() == 0) {
-		t.Errorf("orderTree.Length() incorrect, got: %d, want: %d.", orderTree.Length(), 0)
-	}
+	// if !(orderTree.NotEmpty()) {
+	// 	t.Errorf("orderTree.Length() incorrect, got: %d, want: %d.", orderTree.NotEmpty(), 0)
+	// }
 
 	orderTree.InsertOrder(dummyOrder)
 	orderTree.InsertOrder(dummyOrder1)
@@ -57,16 +57,12 @@ func TestNewOrderTree(t *testing.T) {
 		t.Errorf("orderTree does not contain price %d.", testPrice1)
 	}
 
-	if !(orderTree.Length() == 2) {
-		t.Errorf("orderTree.NumOrders incorrect, got: %d, want: %d.", orderTree.NumOrders, 2)
+	if !(orderTree.Item.NumOrders == 2) {
+		t.Errorf("orderTree.NumOrders incorrect, got: %d, want: %d.", orderTree.Item.NumOrders, 2)
 	}
 
-	orderTree.RemoveOrderByID(dummyOrder1["order_id"])
-	orderTree.RemoveOrderByID(dummyOrder["order_id"])
-
-	if !(orderTree.Length() == 0) {
-		t.Errorf("orderTree.numOrders incorrect, got: %d, want: %d.", orderTree.NumOrders, 0)
-	}
+	orderTree.RemoveOrderByID([]byte(dummyOrder1["order_id"]))
+	orderTree.RemoveOrderByID([]byte(dummyOrder["order_id"]))
 
 	orderTree.InsertOrder(dummyOrder)
 	orderTree.InsertOrder(dummyOrder1)
