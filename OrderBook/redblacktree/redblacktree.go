@@ -158,7 +158,7 @@ func (tree *Tree) GetNode(key []byte) (*Node, error) {
 	} else {
 		bytes, err := tree.db.Get(key)
 		if err != nil {
-			fmt.Printf("Key not found :%s", string(key))
+			fmt.Printf("Key not found :%x", key)
 			return nil, err
 		}
 		item = &Item{}

@@ -28,7 +28,7 @@ func TestOrderList(t *testing.T) {
 	orderList := NewOrderList(testPrice, testOrderTree)
 
 	dummyOrder := make(map[string]string)
-	dummyOrder["timestamp"] = strconv.Itoa(testTimestamp)
+	dummyOrder["timestamp"] = strconv.FormatUint(testTimestamp, 10)
 	dummyOrder["quantity"] = testQuanity.String()
 	dummyOrder["price"] = testPrice.String()
 	dummyOrder["order_id"] = strconv.Itoa(testOrderID)
@@ -50,7 +50,7 @@ func TestOrderList(t *testing.T) {
 	}
 
 	dummyOrder1 := make(map[string]string)
-	dummyOrder1["timestamp"] = strconv.Itoa(testTimestamp1)
+	dummyOrder1["timestamp"] = strconv.FormatUint(testTimestamp1, 10)
 	dummyOrder1["quantity"] = testQuanity1.String()
 	dummyOrder1["price"] = testPrice1.String()
 	dummyOrder1["order_id"] = strconv.Itoa(testOrderID1)

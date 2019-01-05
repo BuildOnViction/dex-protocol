@@ -19,8 +19,8 @@ const (
 )
 
 type OrderBookItem struct {
-	Time        int `json:"time"`
-	NextOrderID int `json:"nextOrderID"`
+	Time        uint64 `json:"time"`
+	NextOrderID uint64 `json:"nextOrderID"`
 }
 
 // OrderBook : list of orders
@@ -34,6 +34,9 @@ type OrderBook struct {
 // NewOrderBook : return new order book
 func NewOrderBook(datadir string) *OrderBook {
 
+	// we can implement using only one DB to faciliate cache engine
+	// so that we use a big.Int number to seperate domain of the keys
+	// like this keccak("orderbook") + key
 	orderbookPath := path.Join(datadir, "orderbook")
 	bidsPath := path.Join(datadir, "bids")
 	asksPath := path.Join(datadir, "asks")
@@ -175,7 +178,7 @@ func (orderbook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 		}
 
 		if quantityToTrade.GreaterThan(decimal.Zero) {
-			quote["order_id"] = strconv.Itoa(orderbook.Item.NextOrderID)
+			quote["order_id"] = strconv.FormatUint(orderbook.Item.NextOrderID, 10)
 			quote["quantity"] = quantityToTrade.String()
 			orderbook.Bids.InsertOrder(quote)
 			orderInBook = quote
@@ -191,7 +194,7 @@ func (orderbook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 		}
 
 		if quantityToTrade.GreaterThan(decimal.Zero) {
-			quote["order_id"] = strconv.Itoa(orderbook.Item.NextOrderID)
+			quote["order_id"] = strconv.FormatUint(orderbook.Item.NextOrderID, 10)
 			quote["quantity"] = quantityToTrade.String()
 			orderbook.Asks.InsertOrder(quote)
 			orderInBook = quote
@@ -261,10 +264,9 @@ func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, 
 		}
 
 		transactionRecord := make(map[string]string)
-		transactionRecord["timestamp"] = strconv.Itoa(orderbook.Item.Time)
+		transactionRecord["timestamp"] = strconv.FormatUint(orderbook.Item.Time, 10)
 		transactionRecord["price"] = tradedPrice.String()
 		transactionRecord["quantity"] = tradedQuantity.String()
-		transactionRecord["time"] = strconv.Itoa(orderbook.Item.Time)
 
 		trades = append(trades, transactionRecord)
 	}
@@ -292,7 +294,7 @@ func (orderbook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID i
 
 	side := quoteUpdate["side"]
 	quoteUpdate["order_id"] = strconv.Itoa(orderID)
-	quoteUpdate["timestamp"] = strconv.Itoa(orderbook.Item.Time)
+	quoteUpdate["timestamp"] = strconv.FormatUint(orderbook.Item.Time, 10)
 	key := []byte(quoteUpdate["order_id"])
 	if side == BID {
 		if orderbook.Bids.OrderExist(key) {

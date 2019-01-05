@@ -26,7 +26,7 @@ type OrderListItem struct {
 	// TailOrder *Order          `json:"tailOrder"`
 	HeadOrder []byte          `json:"headOrder"`
 	TailOrder []byte          `json:"tailOrder"`
-	Length    int             `json:"length"`
+	Length    uint64          `json:"length"`
 	Volume    decimal.Decimal `json:"volume"`
 	Price     decimal.Decimal `json:"price"`
 }
@@ -50,7 +50,7 @@ func NewOrderList(price decimal.Decimal, orderTree *OrderTree) *OrderList {
 		Price:     price,
 	}
 
-	key, _ := price.GobEncode()
+	key := orderTree.getKeyFromPrice(price)
 
 	return &OrderList{
 		Item:      item,

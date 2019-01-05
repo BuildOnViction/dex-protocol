@@ -2,6 +2,7 @@ package orderbook
 
 import (
 	"fmt"
+	"math/big"
 	"path"
 	"strconv"
 	"strings"
@@ -32,8 +33,8 @@ import (
 
 type OrderTreeItem struct {
 	Volume    decimal.Decimal `json:"volume"`    // Contains total quantity from all Orders in tree
-	NumOrders int             `json:"numOrders"` // Contains count of Orders in tree
-	Depth     int             `json:"depth"`     // Number of different prices in tree (http://en.wikipedia.org/wiki/Order_book_(trading)#Book_depth)
+	NumOrders uint64          `json:"numOrders"` // Contains count of Orders in tree
+	Depth     uint64          `json:"depth"`     // Number of different prices in tree (http://en.wikipedia.org/wiki/Order_book_(trading)#Book_depth)
 }
 
 // OrderTree : order tree structure for travelling
@@ -88,7 +89,7 @@ func (orderTree *OrderTree) NotEmpty() bool {
 func (orderTree *OrderTree) Order(key []byte) *Order {
 	bytes, err := orderTree.OrderDB.Get(key)
 	if err != nil {
-		fmt.Printf("Key not found :%s", string(key))
+		fmt.Printf("Key not found :%x", key)
 		return nil
 	}
 	orderItem := &OrderItem{}
@@ -105,9 +106,13 @@ func (orderTree *OrderTree) Order(key []byte) *Order {
 // 	return orderTree.OrderMap[orderID]
 // }
 
+// next time this price will be big.Int
 func (orderTree *OrderTree) getKeyFromPrice(price decimal.Decimal) []byte {
-	orderListKey, _ := price.GobEncode()
-	return orderListKey
+	// orderListKey, _ := price.GobEncode()
+	// return orderListKey
+	bigPrice := new(big.Int)
+	bigPrice.SetString(price.String(), 10)
+	return bigPrice.Bytes()
 }
 
 // PriceList : get the price list from the price map using price as key
@@ -147,6 +152,7 @@ func (orderTree *OrderTree) RemovePrice(price decimal.Decimal) {
 // PriceExist : check price existed
 func (orderTree *OrderTree) PriceExist(price decimal.Decimal) bool {
 	orderListKey := orderTree.getKeyFromPrice(price)
+	// fmt.Printf("Key :%x, %s", orderListKey, price.String())
 	_, found := orderTree.PriceTree.Get(orderListKey)
 	return found
 }
@@ -204,7 +210,7 @@ func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 		orderList.Save()
 	} else {
 		quantity, _ := decimal.NewFromString(quote["quantity"])
-		timestamp, _ := strconv.Atoi(quote["timestamp"])
+		timestamp, _ := strconv.ParseUint(quote["timestamp"], 10, 64)
 		order.UpdateQuantity(orderList, quantity, timestamp)
 		orderList.SaveOrder(order)
 	}

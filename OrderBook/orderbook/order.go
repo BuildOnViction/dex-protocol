@@ -9,7 +9,7 @@ import (
 
 // Order : info that will be store in ipfs
 type OrderItem struct {
-	Timestamp int             `json:"timestamp"`
+	Timestamp uint64          `json:"timestamp"`
 	Quantity  decimal.Decimal `json:"quantity"`
 	Price     decimal.Decimal `json:"price"`
 	// OrderID   string          `json:"orderID"`
@@ -47,7 +47,7 @@ func (o *Order) GetPrevOrder(orderList *OrderList) *Order {
 
 // NewOrder : create new order with quote ( can be ethereum address )
 func NewOrder(quote map[string]string, orderList []byte) *Order {
-	timestamp, _ := strconv.Atoi(quote["timestamp"])
+	timestamp, _ := strconv.ParseUint(quote["timestamp"], 10, 64)
 	quantity, _ := decimal.NewFromString(quote["quantity"])
 	price, _ := decimal.NewFromString(quote["price"])
 	orderID := quote["order_id"]
@@ -72,7 +72,7 @@ func NewOrder(quote map[string]string, orderList []byte) *Order {
 }
 
 // UpdateQuantity : update quantity of the order
-func (o *Order) UpdateQuantity(orderList *OrderList, newQuantity decimal.Decimal, newTimestamp int) {
+func (o *Order) UpdateQuantity(orderList *OrderList, newQuantity decimal.Decimal, newTimestamp uint64) {
 	if newQuantity.GreaterThan(o.Item.Quantity) && !bytes.Equal(orderList.Item.TailOrder, o.Key) {
 		orderList.MoveToTail(o)
 	}
