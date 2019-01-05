@@ -42,7 +42,7 @@ type OrderTree struct {
 	// PriceMap  map[string]*OrderList `json:"priceMap"`  // Dictionary containing price : OrderList object
 	// OrderMap  map[string]*Order     `json:"orderMap"`  // Dictionary containing order_id : Order object
 
-	orderDB *ethdb.LDBDatabase // this is for order
+	OrderDB *ethdb.LDBDatabase // this is for order
 
 	Item *OrderTreeItem
 }
@@ -66,7 +66,7 @@ func NewOrderTree(datadir string) *OrderTree {
 	}
 	return &OrderTree{
 		PriceTree: priceTree,
-		orderDB:   orderDB,
+		OrderDB:   orderDB,
 		Item:      item,
 	}
 }
@@ -81,12 +81,12 @@ func (orderTree *OrderTree) String(startDepth int) string {
 // Check the order database is emtpy or not
 func (orderTree *OrderTree) NotEmpty() bool {
 	// return len(orderTree.OrderMap)
-	iter := orderTree.orderDB.NewIterator()
+	iter := orderTree.OrderDB.NewIterator()
 	return iter.First()
 }
 
 func (orderTree *OrderTree) Order(key []byte) *Order {
-	bytes, err := orderTree.orderDB.Get(key)
+	bytes, err := orderTree.OrderDB.Get(key)
 	if err != nil {
 		fmt.Printf("Key not found :%s", string(key))
 		return nil
@@ -121,8 +121,9 @@ func (orderTree *OrderTree) PriceList(price decimal.Decimal) *OrderList {
 	}
 
 	return &OrderList{
-		Item: item,
-		Key:  orderListKey,
+		Item:      item,
+		Key:       orderListKey,
+		orderTree: orderTree,
 	}
 	// return orderTree.PriceMap[price.String()]
 }
@@ -154,7 +155,7 @@ func (orderTree *OrderTree) PriceExist(price decimal.Decimal) bool {
 
 // OrderExist : check order existed
 func (orderTree *OrderTree) OrderExist(key []byte) bool {
-	found, _ := orderTree.orderDB.Has(key)
+	found, _ := orderTree.OrderDB.Has(key)
 	return found
 }
 
@@ -236,6 +237,15 @@ func (orderTree *OrderTree) getOrderListItem(bytes []byte) *OrderListItem {
 	return item
 }
 
+func (orderTree *OrderTree) DecodeOrderList(bytes []byte) *OrderList {
+	item := orderTree.getOrderListItem(bytes)
+	return &OrderList{
+		Item:      item,
+		Key:       orderTree.getKeyFromPrice(item.Price),
+		orderTree: orderTree,
+	}
+}
+
 // MaxPrice : get the max price
 func (orderTree *OrderTree) MaxPrice() decimal.Decimal {
 	if orderTree.Item.Depth > 0 {
@@ -267,11 +277,7 @@ func (orderTree *OrderTree) MinPrice() decimal.Decimal {
 func (orderTree *OrderTree) MaxPriceList() *OrderList {
 	if orderTree.Item.Depth > 0 {
 		if bytes, found := orderTree.PriceTree.GetMax(); found {
-			item := orderTree.getOrderListItem(bytes)
-			return &OrderList{
-				Item: item,
-				Key:  orderTree.getKeyFromPrice(item.Price),
-			}
+			return orderTree.DecodeOrderList(bytes)
 		}
 	}
 	return nil
@@ -282,11 +288,7 @@ func (orderTree *OrderTree) MaxPriceList() *OrderList {
 func (orderTree *OrderTree) MinPriceList() *OrderList {
 	if orderTree.Item.Depth > 0 {
 		if bytes, found := orderTree.PriceTree.GetMin(); found {
-			item := orderTree.getOrderListItem(bytes)
-			return &OrderList{
-				Item: item,
-				Key:  orderTree.getKeyFromPrice(item.Price),
-			}
+			return orderTree.DecodeOrderList(bytes)
 		}
 	}
 	return nil

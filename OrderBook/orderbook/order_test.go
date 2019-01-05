@@ -50,16 +50,16 @@ func TestOrder(t *testing.T) {
 	dummyOrder["order_id"] = strconv.Itoa(testOrderID)
 	dummyOrder["trade_id"] = strconv.Itoa(testTradeID)
 
-	order := NewOrder(dummyOrder, orderList)
+	order := NewOrder(dummyOrder, orderList.Key)
 	orderList.AppendOrder(order)
-	order.UpdateQuantity(testQuanity1, testTimestamp1)
+	order.UpdateQuantity(orderList, testQuanity1, testTimestamp1)
 
-	if !(order.Quantity.Equal(testQuanity1)) {
-		t.Errorf("order id incorrect, got: %s, want: %d.", order.OrderID, testOrderID)
+	if !(order.Item.Quantity.Equal(testQuanity1)) {
+		t.Errorf("order id incorrect, got: %s, want: %d.", order.Key, testOrderID)
 	}
 
-	if !(order.Timestamp == testTimestamp1) {
-		t.Errorf("trade id incorrect, got: %s, want: %d.", order.TradeID, testTradeID)
+	if !(order.Item.Timestamp == testTimestamp1) {
+		t.Errorf("trade id incorrect, got: %s, want: %d.", order.Item.TradeID, testTradeID)
 	}
 
 	// log in json format
@@ -71,7 +71,7 @@ func TestOrder(t *testing.T) {
 		dummyOrder1["order_id"] = strconv.Itoa(testOrderID1)
 		dummyOrder1["trade_id"] = strconv.Itoa(testTradeID1)
 
-		order1 := NewOrder(dummyOrder1, orderList)
+		order1 := NewOrder(dummyOrder1, orderList.Key)
 		orderList.AppendOrder(order1)
 	}
 

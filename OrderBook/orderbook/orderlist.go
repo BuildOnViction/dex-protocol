@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/shopspring/decimal"
 )
@@ -36,13 +35,13 @@ type OrderListItem struct {
 type OrderList struct {
 	// db      *ethdb.LDBDatabase
 	orderTree *OrderTree
-	orderDB   *ethdb.LDBDatabase
-	Item      *OrderListItem
-	Key       []byte
+	// orderDB   *ethdb.LDBDatabase
+	Item *OrderListItem
+	Key  []byte
 }
 
 // NewOrderList : return new OrderList
-func NewOrderList(price decimal.Decimal) *OrderList {
+func NewOrderList(price decimal.Decimal, orderTree *OrderTree) *OrderList {
 	item := &OrderListItem{
 		HeadOrder: nil,
 		TailOrder: nil,
@@ -54,8 +53,9 @@ func NewOrderList(price decimal.Decimal) *OrderList {
 	key, _ := price.GobEncode()
 
 	return &OrderList{
-		Item: item,
-		Key:  key,
+		Item:      item,
+		Key:       key,
+		orderTree: orderTree,
 	}
 }
 
@@ -158,7 +158,7 @@ func (orderList *OrderList) SaveOrder(order *Order) {
 	}
 
 	// using other db to store Order object
-	orderList.orderDB.Put(order.Key, value)
+	orderList.orderTree.OrderDB.Put(order.Key, value)
 	fmt.Printf("Save %x, value :%x\n", order.Key, value)
 }
 
