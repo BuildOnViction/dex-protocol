@@ -40,7 +40,7 @@ func (node *Node) String(tree *Tree) string {
 	if node == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("%v -> %v, (%v)\n", tree.FormatBytes(node.Key), string(node.Value()), node.Item.Keys.String(tree))
+	return fmt.Sprintf("%v -> %x, (%v)\n", tree.FormatBytes(node.Key), node.Value(), node.Item.Keys.String(tree))
 }
 
 func (node *Node) maximumNode(tree *Tree) *Node {

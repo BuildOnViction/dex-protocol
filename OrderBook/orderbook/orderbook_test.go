@@ -1,9 +1,8 @@
 package orderbook
 
 import (
+	"math/big"
 	"testing"
-
-	"github.com/shopspring/decimal"
 )
 
 func TestNewOrderBook(t *testing.T) {
@@ -11,24 +10,24 @@ func TestNewOrderBook(t *testing.T) {
 	// // try to restore before next operation
 	// orderBook.Restore()
 
-	if !(orderBook.VolumeAtPrice(BID, decimal.Zero).Equal(decimal.Zero)) {
-		t.Errorf("orderBook.VolumeAtPrice incorrect, got: %d, want: %d.", orderBook.VolumeAtPrice(BID, decimal.Zero), decimal.Zero)
+	if orderBook.VolumeAtPrice(BID, Zero).Cmp(Zero) != 0 {
+		t.Errorf("orderBook.VolumeAtPrice incorrect, got: %d, want: %d.", orderBook.VolumeAtPrice(BID, Zero), Zero)
 	}
 
-	if !(orderBook.BestAsk().Equal(decimal.Zero)) {
-		t.Errorf("orderBook.BestAsk incorrect, got: %d, want: %d.", orderBook.BestAsk(), decimal.Zero)
+	if orderBook.BestAsk().Cmp(Zero) != 0 {
+		t.Errorf("orderBook.BestAsk incorrect, got: %d, want: %d.", orderBook.BestAsk(), Zero)
 	}
 
-	if !(orderBook.WorstBid().Equal(decimal.Zero)) {
-		t.Errorf("orderBook.WorstBid incorrect, got: %d, want: %d.", orderBook.WorstBid(), decimal.Zero)
+	if orderBook.WorstBid().Cmp(Zero) != 0 {
+		t.Errorf("orderBook.WorstBid incorrect, got: %d, want: %d.", orderBook.WorstBid(), Zero)
 	}
 
-	if !(orderBook.WorstAsk().Equal(decimal.Zero)) {
-		t.Errorf("orderBook.WorstAsk incorrect, got: %d, want: %d.", orderBook.WorstAsk(), decimal.Zero)
+	if orderBook.WorstAsk().Cmp(Zero) != 0 {
+		t.Errorf("orderBook.WorstAsk incorrect, got: %d, want: %d.", orderBook.WorstAsk(), Zero)
 	}
 
-	if !(orderBook.BestBid().Equal(decimal.Zero)) {
-		t.Errorf("orderBook.BestBid incorrect, got: %d, want: %d.", orderBook.BestBid(), decimal.Zero)
+	if orderBook.BestBid().Cmp(Zero) != 0 {
+		t.Errorf("orderBook.BestBid incorrect, got: %d, want: %d.", orderBook.BestBid(), Zero)
 	}
 }
 
@@ -117,29 +116,29 @@ func TestOrderBook(t *testing.T) {
 		orderBook.ProcessOrder(order, true)
 	}
 
-	value, _ := decimal.NewFromString("101")
-	if !(orderBook.BestAsk().Equal(value)) {
+	value, _ := new(big.Int).SetString("101", 10)
+	if orderBook.BestAsk().Cmp(value) != 0 {
 		t.Errorf("orderBook.BestAsk incorrect, got: %v, want: %v.", orderBook.BestAsk(), value)
 	}
 
-	value, _ = decimal.NewFromString("103")
-	if !(orderBook.WorstAsk().Equal(value)) {
+	value, _ = new(big.Int).SetString("103", 10)
+	if orderBook.WorstAsk().Cmp(value) != 0 {
 		t.Errorf("orderBook.WorstAsk incorrect, got: %v, want: %v.", orderBook.WorstAsk(), value)
 	}
 
-	value, _ = decimal.NewFromString("99")
-	if !(orderBook.BestBid().Equal(value)) {
+	value, _ = new(big.Int).SetString("99", 10)
+	if orderBook.BestBid().Cmp(value) != 0 {
 		t.Errorf("orderBook.BestBid incorrect, got: %v, want: %v.", orderBook.BestBid(), value)
 	}
 
-	value, _ = decimal.NewFromString("97")
-	if !(orderBook.WorstBid().Equal(value)) {
+	value, _ = new(big.Int).SetString("97", 10)
+	if orderBook.WorstBid().Cmp(value) != 0 {
 		t.Errorf("orderBook.WorstBid incorrect, got: %v, want: %v.", orderBook.WorstBid(), value)
 	}
 
-	value, _ = decimal.NewFromString("15")
-	pricePoint, _ := decimal.NewFromString("101")
-	if !(orderBook.VolumeAtPrice(ASK, pricePoint).Equal(value)) {
+	value, _ = new(big.Int).SetString("15", 10)
+	pricePoint, _ := new(big.Int).SetString("101", 10)
+	if orderBook.VolumeAtPrice(ASK, pricePoint).Cmp(value) != 0 {
 		t.Errorf("orderBook.VolumeAtPrice incorrect, got: %v, want: %v.", orderBook.VolumeAtPrice(ASK, pricePoint), value)
 	}
 

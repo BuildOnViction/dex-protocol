@@ -3,10 +3,11 @@ package orderbook
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/shopspring/decimal"
+	"github.com/tomochain/backend-matching-engine/utils/math"
 )
 
 // Item : comparable
@@ -24,11 +25,11 @@ var emptyKey = []byte{}
 type OrderListItem struct {
 	// HeadOrder *Order          `json:"headOrder"`
 	// TailOrder *Order          `json:"tailOrder"`
-	HeadOrder []byte          `json:"headOrder"`
-	TailOrder []byte          `json:"tailOrder"`
-	Length    uint64          `json:"length"`
-	Volume    decimal.Decimal `json:"volume"`
-	Price     decimal.Decimal `json:"price"`
+	HeadOrder []byte   `json:"headOrder"`
+	TailOrder []byte   `json:"tailOrder"`
+	Length    uint64   `json:"length"`
+	Volume    *big.Int `json:"volume"`
+	Price     *big.Int `json:"price"`
 }
 
 // OrderList : order list
@@ -41,12 +42,12 @@ type OrderList struct {
 }
 
 // NewOrderList : return new OrderList
-func NewOrderList(price decimal.Decimal, orderTree *OrderTree) *OrderList {
+func NewOrderList(price *big.Int, orderTree *OrderTree) *OrderList {
 	item := &OrderListItem{
 		HeadOrder: nil,
 		TailOrder: nil,
 		Length:    0,
-		Volume:    decimal.Zero,
+		Volume:    big.NewInt(0),
 		Price:     price,
 	}
 
@@ -68,19 +69,9 @@ func (orderList *OrderList) HeadOrderKey(keys ...[]byte) []byte {
 }
 
 func (orderList *OrderList) GetOrder(key []byte) *Order {
-	// bytes, err := orderList.orderDB.Get(key)
-	// if err != nil {
-	// 	fmt.Printf("Key not found :%s", string(key))
-	// 	return nil, err
-	// }
-	// orderItem := &OrderItem{}
-	// err = rlp.DecodeBytes(bytes, orderItem)
-	// order := &Order{
-	// 	Item: orderItem,
-	// 	Key:  key,
-	// }
-	// return order, err
-
+	if orderList.isEmptyKey(key) {
+		return nil
+	}
 	return orderList.orderTree.Order(key)
 }
 
@@ -135,7 +126,7 @@ func (orderList *OrderList) String(startDepth int) string {
 // Less : compare if this order list is less than compared object
 func (orderList *OrderList) Less(than *OrderList) bool {
 	// cast to OrderList pointer
-	return orderList.Item.Price.LessThan(than.Item.Price)
+	return orderList.Item.Price.Cmp(than.Item.Price) < 0
 }
 
 func (orderList *OrderList) Save() {
@@ -147,7 +138,7 @@ func (orderList *OrderList) Save() {
 	// we use orderlist db file seperated from order
 	// orderList.db.Put(orderList.Key, value)
 	orderList.orderTree.PriceTree.Put(orderList.Key, value)
-	fmt.Printf("Save %x, value :%x\n", orderList.Key, value)
+	fmt.Printf("Save orderlist key %x, value :%x\n", orderList.Key, value)
 }
 
 func (orderList *OrderList) SaveOrder(order *Order) {
@@ -158,8 +149,10 @@ func (orderList *OrderList) SaveOrder(order *Order) {
 	}
 
 	// using other db to store Order object
-	orderList.orderTree.OrderDB.Put(order.Key, value)
-	fmt.Printf("Save %x, value :%x\n", order.Key, value)
+	// key := common.BytesToHash(order.Key).Bytes()
+	key := order.Key
+	orderList.orderTree.OrderDB.Put(key, value)
+	fmt.Printf("Save order key : %x, value :%x\n", key, value)
 }
 
 // AppendOrder : append order into the order list
@@ -184,7 +177,7 @@ func (orderList *OrderList) AppendOrder(order *Order) {
 		}
 	}
 	orderList.Item.Length++
-	orderList.Item.Volume = orderList.Item.Volume.Add(order.Item.Quantity)
+	orderList.Item.Volume = math.Add(orderList.Item.Volume, order.Item.Quantity)
 
 	orderList.SaveOrder(order)
 	orderList.Save()
@@ -192,7 +185,7 @@ func (orderList *OrderList) AppendOrder(order *Order) {
 
 // RemoveOrder : remove order from the order list
 func (orderList *OrderList) RemoveOrder(order *Order) {
-	orderList.Item.Volume = orderList.Item.Volume.Sub(order.Item.Quantity)
+	orderList.Item.Volume = math.Sub(orderList.Item.Volume, order.Item.Quantity)
 	orderList.Item.Length--
 	if orderList.Item.Length == 0 {
 		return

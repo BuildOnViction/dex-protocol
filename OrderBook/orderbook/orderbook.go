@@ -2,13 +2,14 @@ package orderbook
 
 import (
 	"fmt"
+	"math/big"
 	"path"
 	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/shopspring/decimal"
+	"github.com/tomochain/backend-matching-engine/utils/math"
 )
 
 const (
@@ -17,6 +18,8 @@ const (
 	// BID : bid constant
 	BID = "bid"
 )
+
+var Zero = big.NewInt(0)
 
 type OrderBookItem struct {
 	Time        uint64 `json:"time"`
@@ -98,7 +101,7 @@ func (orderbook *OrderBook) Restore() {
 }
 
 // we need to store orderbook information as well
-// Volume    decimal.Decimal `json:"volume"`    // Contains total quantity from all Orders in tree
+// Volume    *big.Int `json:"volume"`    // Contains total quantity from all Orders in tree
 // 	NumOrders int             `json:"numOrders"` // Contains count of Orders in tree
 // 	Depth
 
@@ -115,40 +118,40 @@ func (orderbook *OrderBook) UpdateTime() {
 }
 
 // BestBid : get the best bid of the order book
-func (orderbook *OrderBook) BestBid() (value decimal.Decimal) {
+func (orderbook *OrderBook) BestBid() (value *big.Int) {
 	return orderbook.Bids.MaxPrice()
 }
 
 // BestAsk : get the best ask of the order book
-func (orderbook *OrderBook) BestAsk() (value decimal.Decimal) {
+func (orderbook *OrderBook) BestAsk() (value *big.Int) {
 	return orderbook.Asks.MinPrice()
 }
 
 // WorstBid : get the worst bid of the order book
-func (orderbook *OrderBook) WorstBid() (value decimal.Decimal) {
+func (orderbook *OrderBook) WorstBid() (value *big.Int) {
 	return orderbook.Bids.MinPrice()
 }
 
 // WorstAsk : get the worst ask of the order book
-func (orderbook *OrderBook) WorstAsk() (value decimal.Decimal) {
+func (orderbook *OrderBook) WorstAsk() (value *big.Int) {
 	return orderbook.Asks.MaxPrice()
 }
 
 // processMarketOrder : process the market order
 func (orderbook *OrderBook) processMarketOrder(quote map[string]string, verbose bool) []map[string]string {
 	var trades []map[string]string
-	quantityToTrade, _ := decimal.NewFromString(quote["quantity"])
+	quantityToTrade, _ := new(big.Int).SetString(quote["quantity"], 10)
 	side := quote["side"]
 	var newTrades []map[string]string
 
 	if side == BID {
-		for quantityToTrade.GreaterThan(decimal.Zero) && orderbook.Asks.NotEmpty() {
+		for quantityToTrade.Cmp(Zero) > 0 && orderbook.Asks.NotEmpty() {
 			bestPriceAsks := orderbook.Asks.MinPriceList()
 			quantityToTrade, newTrades = orderbook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 		}
 	} else if side == ASK {
-		for quantityToTrade.GreaterThan(decimal.Zero) && orderbook.Bids.NotEmpty() {
+		for quantityToTrade.Cmp(Zero) > 0 && orderbook.Bids.NotEmpty() {
 			bestPriceBids := orderbook.Bids.MaxPriceList()
 			quantityToTrade, newTrades = orderbook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
@@ -161,23 +164,23 @@ func (orderbook *OrderBook) processMarketOrder(quote map[string]string, verbose 
 // If not care for performance, we should make a copy of quote to prevent further reference problem
 func (orderbook *OrderBook) processLimitOrder(quote map[string]string, verbose bool) ([]map[string]string, map[string]string) {
 	var trades []map[string]string
-	quantityToTrade, _ := decimal.NewFromString(quote["quantity"])
+	quantityToTrade, _ := new(big.Int).SetString(quote["quantity"], 10)
 	side := quote["side"]
-	price, _ := decimal.NewFromString(quote["price"])
+	price, _ := new(big.Int).SetString(quote["price"], 10)
 	var newTrades []map[string]string
 
 	var orderInBook map[string]string
 
 	if side == BID {
 		minPrice := orderbook.Asks.MinPrice()
-		for quantityToTrade.GreaterThan(decimal.Zero) && orderbook.Asks.NotEmpty() && price.GreaterThanOrEqual(minPrice) {
+		for quantityToTrade.Cmp(Zero) > 0 && orderbook.Asks.NotEmpty() && price.Cmp(minPrice) >= 0 {
 			bestPriceAsks := orderbook.Asks.MinPriceList()
 			quantityToTrade, newTrades = orderbook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 			minPrice = orderbook.Asks.MinPrice()
 		}
 
-		if quantityToTrade.GreaterThan(decimal.Zero) {
+		if quantityToTrade.Cmp(Zero) > 0 {
 			quote["order_id"] = strconv.FormatUint(orderbook.Item.NextOrderID, 10)
 			quote["quantity"] = quantityToTrade.String()
 			orderbook.Bids.InsertOrder(quote)
@@ -186,14 +189,14 @@ func (orderbook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 
 	} else if side == "ask" {
 		maxPrice := orderbook.Bids.MaxPrice()
-		for quantityToTrade.GreaterThan(decimal.Zero) && orderbook.Bids.NotEmpty() && price.LessThanOrEqual(maxPrice) {
+		for quantityToTrade.Cmp(Zero) > 0 && orderbook.Bids.NotEmpty() && price.Cmp(maxPrice) <= 0 {
 			bestPriceBids := orderbook.Bids.MaxPriceList()
 			quantityToTrade, newTrades = orderbook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 			maxPrice = orderbook.Bids.MaxPrice()
 		}
 
-		if quantityToTrade.GreaterThan(decimal.Zero) {
+		if quantityToTrade.Cmp(Zero) > 0 {
 			quote["order_id"] = strconv.FormatUint(orderbook.Item.NextOrderID, 10)
 			quote["quantity"] = quantityToTrade.String()
 			orderbook.Asks.InsertOrder(quote)
@@ -222,32 +225,32 @@ func (orderbook *OrderBook) ProcessOrder(quote map[string]string, verbose bool) 
 }
 
 // processOrderList : process the order list
-func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, quantityStillToTrade decimal.Decimal, quote map[string]string, verbose bool) (decimal.Decimal, []map[string]string) {
+func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, quantityStillToTrade *big.Int, quote map[string]string, verbose bool) (*big.Int, []map[string]string) {
 	quantityToTrade := quantityStillToTrade
 	var trades []map[string]string
 
-	for orderList.Item.Length > 0 && quantityToTrade.GreaterThan(decimal.Zero) {
+	for orderList.Item.Length > 0 && quantityToTrade.Cmp(Zero) > 0 {
 		headOrder := orderList.GetOrder(orderList.Item.HeadOrder)
 		tradedPrice := headOrder.Item.Price
 
-		var newBookQuantity decimal.Decimal
-		var tradedQuantity decimal.Decimal
+		var newBookQuantity *big.Int
+		var tradedQuantity *big.Int
 
-		if quantityToTrade.LessThan(headOrder.Item.Quantity) {
+		if quantityToTrade.Cmp(headOrder.Item.Quantity) < 0 {
 			tradedQuantity = quantityToTrade
 			// Do the transaction
-			newBookQuantity = headOrder.Item.Quantity.Sub(quantityToTrade)
+			newBookQuantity = math.Sub(headOrder.Item.Quantity, quantityToTrade)
 			headOrder.UpdateQuantity(orderList, newBookQuantity, headOrder.Item.Timestamp)
-			quantityToTrade = decimal.Zero
+			quantityToTrade = Zero
 
-		} else if quantityToTrade.Equal(headOrder.Item.Quantity) {
+		} else if quantityToTrade.Cmp(headOrder.Item.Quantity) == 0 {
 			tradedQuantity = quantityToTrade
 			if side == BID {
 				orderbook.Bids.RemoveOrderByID(headOrder.Key)
 			} else {
 				orderbook.Asks.RemoveOrderByID(headOrder.Key)
 			}
-			quantityToTrade = decimal.Zero
+			quantityToTrade = Zero
 
 		} else {
 			tradedQuantity = headOrder.Item.Quantity
@@ -308,9 +311,9 @@ func (orderbook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID i
 }
 
 // VolumeAtPrice : get volume at the current price
-func (orderbook *OrderBook) VolumeAtPrice(side string, price decimal.Decimal) decimal.Decimal {
+func (orderbook *OrderBook) VolumeAtPrice(side string, price *big.Int) *big.Int {
 	if side == BID {
-		volume := decimal.Zero
+		volume := Zero
 		if orderbook.Bids.PriceExist(price) {
 			orderList := orderbook.Bids.PriceList(price)
 			volume = orderList.Item.Volume
@@ -320,7 +323,7 @@ func (orderbook *OrderBook) VolumeAtPrice(side string, price decimal.Decimal) de
 	}
 
 	// other case
-	volume := decimal.Zero
+	volume := Zero
 	if orderbook.Asks.PriceExist(price) {
 		orderList := orderbook.Asks.PriceList(price)
 		volume = orderList.Item.Volume

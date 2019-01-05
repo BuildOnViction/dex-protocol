@@ -3,8 +3,6 @@ package orderbook
 import (
 	"strconv"
 	"testing"
-
-	"github.com/shopspring/decimal"
 )
 
 func TestNewOrderTree(t *testing.T) {
@@ -38,8 +36,8 @@ func TestNewOrderTree(t *testing.T) {
 	dummyOrder3["order_id"] = strconv.Itoa(testOrderID3)
 	dummyOrder3["trade_id"] = strconv.Itoa(testTradeID3)
 
-	if !(orderTree.Item.Volume.Equal(decimal.Zero)) {
-		t.Errorf("orderTree.Volume incorrect, got: %d, want: %d.", orderTree.Item.Volume, decimal.Zero)
+	if orderTree.Item.Volume.Cmp(Zero) != 0 {
+		t.Errorf("orderTree.Volume incorrect, got: %d, want: %s.", orderTree.Item.Volume, Zero)
 	}
 
 	// if !(orderTree.NotEmpty()) {
@@ -50,11 +48,11 @@ func TestNewOrderTree(t *testing.T) {
 	orderTree.InsertOrder(dummyOrder1)
 
 	if !(orderTree.PriceExist(testPrice)) {
-		t.Errorf("orderTree does not contain price %d.", testPrice)
+		t.Errorf("orderTree does not contain price %s.", testPrice)
 	}
 
 	if !(orderTree.PriceExist(testPrice1)) {
-		t.Errorf("orderTree does not contain price %d.", testPrice1)
+		t.Errorf("orderTree does not contain price %s.", testPrice1)
 	}
 
 	if !(orderTree.Item.NumOrders == 2) {
@@ -68,19 +66,20 @@ func TestNewOrderTree(t *testing.T) {
 	orderTree.InsertOrder(dummyOrder1)
 	orderTree.InsertOrder(dummyOrder2)
 	orderTree.InsertOrder(dummyOrder3)
-
-	if !(orderTree.MaxPrice().Equal(testPrice3)) {
-		t.Errorf("orderTree.MaxPrice incorrect, got: %d, want: %d.", orderTree.MaxPrice(), testPrice3)
+	maxPrice := orderTree.MaxPrice()
+	minPrice := orderTree.MinPrice()
+	if maxPrice.Cmp(testPrice3) != 0 {
+		t.Errorf("orderTree.MaxPrice incorrect, got: %s, want: %s.", maxPrice, testPrice3)
 	}
 
-	if !(orderTree.MinPrice().Equal(testPrice)) {
-		t.Errorf("orderTree.MinPrice incorrect, got: %d, want: %d.", orderTree.MinPrice(), testPrice)
+	if minPrice.Cmp(testPrice) != 0 {
+		t.Errorf("orderTree.MinPrice incorrect, got: %s, want: %s.", minPrice, testPrice)
 	}
 
 	orderTree.RemovePrice(testPrice)
 
 	if orderTree.PriceExist(testPrice) {
-		t.Errorf("orderTree.MinPrice incorrect, got: %d, want: %d.", orderTree.MinPrice(), testPrice)
+		t.Errorf("orderTree.MinPrice incorrect, got: %s, want: %s.", minPrice, testPrice)
 	}
 
 	t.Logf("OrderTree : %s", orderTree.String(0))

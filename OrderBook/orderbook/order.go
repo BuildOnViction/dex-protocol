@@ -2,16 +2,18 @@ package orderbook
 
 import (
 	"bytes"
+	"math/big"
 	"strconv"
 
-	"github.com/shopspring/decimal"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/tomochain/backend-matching-engine/utils/math"
 )
 
 // Order : info that will be store in ipfs
 type OrderItem struct {
-	Timestamp uint64          `json:"timestamp"`
-	Quantity  decimal.Decimal `json:"quantity"`
-	Price     decimal.Decimal `json:"price"`
+	Timestamp uint64   `json:"timestamp"`
+	Quantity  *big.Int `json:"quantity"`
+	Price     *big.Int `json:"price"`
 	// OrderID   string          `json:"orderID"`
 	TradeID string `json:"tradeID"`
 	// these following fields can lead to recursive problem
@@ -48,8 +50,8 @@ func (o *Order) GetPrevOrder(orderList *OrderList) *Order {
 // NewOrder : create new order with quote ( can be ethereum address )
 func NewOrder(quote map[string]string, orderList []byte) *Order {
 	timestamp, _ := strconv.ParseUint(quote["timestamp"], 10, 64)
-	quantity, _ := decimal.NewFromString(quote["quantity"])
-	price, _ := decimal.NewFromString(quote["price"])
+	quantity, _ := new(big.Int).SetString(quote["quantity"], 10)
+	price, _ := new(big.Int).SetString(quote["price"], 10)
 	orderID := quote["order_id"]
 	tradeID := quote["trade_id"]
 	orderItem := &OrderItem{
@@ -63,8 +65,9 @@ func NewOrder(quote map[string]string, orderList []byte) *Order {
 		OrderList: orderList,
 	}
 
+	// key should be Hash for compatible with smart contract
 	order := &Order{
-		Key:  []byte(orderID),
+		Key:  common.StringToHash(orderID).Bytes(),
 		Item: orderItem,
 	}
 
@@ -72,12 +75,12 @@ func NewOrder(quote map[string]string, orderList []byte) *Order {
 }
 
 // UpdateQuantity : update quantity of the order
-func (o *Order) UpdateQuantity(orderList *OrderList, newQuantity decimal.Decimal, newTimestamp uint64) {
-	if newQuantity.GreaterThan(o.Item.Quantity) && !bytes.Equal(orderList.Item.TailOrder, o.Key) {
+func (o *Order) UpdateQuantity(orderList *OrderList, newQuantity *big.Int, newTimestamp uint64) {
+	if newQuantity.Cmp(o.Item.Quantity) > 0 && !bytes.Equal(orderList.Item.TailOrder, o.Key) {
 		orderList.MoveToTail(o)
 	}
 	// update volume and modified timestamp
-	orderList.Item.Volume = orderList.Item.Volume.Sub(o.Item.Quantity.Sub(newQuantity))
+	orderList.Item.Volume = math.Sub(orderList.Item.Volume, math.Sub(o.Item.Quantity, newQuantity))
 	o.Item.Timestamp = newTimestamp
 	o.Item.Quantity = newQuantity
 
