@@ -1,6 +1,7 @@
 package orderbook
 
 import (
+	"bytes"
 	"strconv"
 	"testing"
 )
@@ -13,29 +14,29 @@ func TestNewOrder(t *testing.T) {
 	dummyOrder["price"] = testPrice.String()
 	dummyOrder["order_id"] = strconv.Itoa(testOrderID)
 	dummyOrder["trade_id"] = strconv.Itoa(testTradeID)
-
-	order := NewOrder(dummyOrder, &orderList)
+	priceKey, _ := testPrice.GobEncode()
+	order := NewOrder(dummyOrder, priceKey)
 
 	t.Logf("Order : %s", order)
 
-	if !(order.Timestamp == testTimestamp) {
-		t.Errorf("Timesmape incorrect, got: %d, want: %d.", order.Timestamp, testTimestamp)
+	if !(order.Item.Timestamp == testTimestamp) {
+		t.Errorf("Timesmape incorrect, got: %d, want: %d.", order.Item.Timestamp, testTimestamp)
 	}
 
-	if !(order.Quantity.Equal(testQuanity)) {
-		t.Errorf("quantity incorrect, got: %d, want: %d.", order.Quantity, testQuanity)
+	if !(order.Item.Quantity.Equal(testQuanity)) {
+		t.Errorf("quantity incorrect, got: %d, want: %d.", order.Item.Quantity, testQuanity)
 	}
 
-	if !(order.Price.Equal(testPrice)) {
-		t.Errorf("price incorrect, got: %d, want: %d.", order.Price, testPrice)
+	if !(order.Item.Price.Equal(testPrice)) {
+		t.Errorf("price incorrect, got: %d, want: %d.", order.Item.Price, testPrice)
 	}
 
-	if !(order.OrderID == strconv.Itoa(testOrderID)) {
-		t.Errorf("order id incorrect, got: %s, want: %d.", order.OrderID, testOrderID)
+	if !bytes.Equal(order.Key, []byte(dummyOrder["order_id"])) {
+		t.Errorf("order id incorrect, got: %x, want: %d.", order.Key, testOrderID)
 	}
 
-	if !(order.TradeID == strconv.Itoa(testTradeID)) {
-		t.Errorf("trade id incorrect, got: %s, want: %d.", order.TradeID, testTradeID)
+	if !(order.Item.TradeID == strconv.Itoa(testTradeID)) {
+		t.Errorf("trade id incorrect, got: %s, want: %d.", order.Item.TradeID, testTradeID)
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewOrderBook(t *testing.T) {
-	orderBook := NewOrderBook()
+	orderBook := NewOrderBook("../datadir/tomo/orderbook")
 
 	if !(orderBook.VolumeAtPrice(BID, decimal.Zero).Equal(decimal.Zero)) {
 		t.Errorf("orderBook.VolumeAtPrice incorrect, got: %d, want: %d.", orderBook.VolumeAtPrice(BID, decimal.Zero), decimal.Zero)
@@ -31,7 +31,7 @@ func TestNewOrderBook(t *testing.T) {
 }
 
 func TestOrderBook(t *testing.T) {
-	orderBook := NewOrderBook()
+	orderBook := NewOrderBook("../datadir/tomo/orderbook")
 	limitOrders := make([]map[string]string, 0)
 
 	dummyOrder := make(map[string]string)

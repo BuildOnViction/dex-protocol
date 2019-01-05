@@ -5,74 +5,126 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/shopspring/decimal"
 )
 
 // Item : comparable
-type Item interface {
-	Less(than Item) bool
-}
+// type Item interface {
+// 	Less(than Item) bool
+// }
 
 const (
 	// LimitDepthPrint : the maximum depth of order list to be printed
 	LimitDepthPrint = 20
 )
 
-// OrderList : order list
-type OrderList struct {
-	HeadOrder *Order          `json:"headOrder"`
-	TailOrder *Order          `json:"tailOrder"`
+var emptyKey = []byte{}
+
+type OrderListItem struct {
+	// HeadOrder *Order          `json:"headOrder"`
+	// TailOrder *Order          `json:"tailOrder"`
+	HeadOrder []byte          `json:"headOrder"`
+	TailOrder []byte          `json:"tailOrder"`
 	Length    int             `json:"length"`
 	Volume    decimal.Decimal `json:"volume"`
 	Price     decimal.Decimal `json:"price"`
 }
 
+// OrderList : order list
+type OrderList struct {
+	// db      *ethdb.LDBDatabase
+	orderTree *OrderTree
+	orderDB   *ethdb.LDBDatabase
+	Item      *OrderListItem
+	Key       []byte
+}
+
 // NewOrderList : return new OrderList
 func NewOrderList(price decimal.Decimal) *OrderList {
-	return &OrderList{
+	item := &OrderListItem{
 		HeadOrder: nil,
 		TailOrder: nil,
 		Length:    0,
 		Volume:    decimal.Zero,
 		Price:     price,
 	}
+
+	key, _ := price.GobEncode()
+
+	return &OrderList{
+		Item: item,
+		Key:  key,
+	}
+}
+
+func (orderList *OrderList) HeadOrderKey(keys ...[]byte) []byte {
+	if len(keys) == 1 {
+		orderList.Item.HeadOrder = keys[0]
+	}
+
+	return orderList.Item.HeadOrder
+}
+
+func (orderList *OrderList) GetOrder(key []byte) *Order {
+	// bytes, err := orderList.orderDB.Get(key)
+	// if err != nil {
+	// 	fmt.Printf("Key not found :%s", string(key))
+	// 	return nil, err
+	// }
+	// orderItem := &OrderItem{}
+	// err = rlp.DecodeBytes(bytes, orderItem)
+	// order := &Order{
+	// 	Item: orderItem,
+	// 	Key:  key,
+	// }
+	// return order, err
+
+	return orderList.orderTree.Order(key)
+}
+
+func (orderList *OrderList) isEmptyKey(key []byte) bool {
+	return key == nil || len(key) == 0 || bytes.Equal(key, emptyKey)
 }
 
 func (orderList *OrderList) String(startDepth int) string {
 	var buffer bytes.Buffer
 	tabs := strings.Repeat("\t", startDepth)
 	buffer.WriteString(fmt.Sprintf("{\n\t%sLength: %d\n\t%sVolume: %v\n\t%sPrice: %v",
-		tabs, orderList.Length, tabs, orderList.Volume, tabs, orderList.Price))
+		tabs, orderList.Item.Length, tabs, orderList.Item.Volume, tabs, orderList.Item.Price))
 
 	buffer.WriteString("\n\t")
 	buffer.WriteString(tabs)
 	buffer.WriteString("Head:")
-	linkedList := orderList.HeadOrder
+	linkedList := orderList.GetOrder(orderList.Item.HeadOrder)
 	depth := 0
 	for linkedList != nil {
 		depth++
 		spaces := strings.Repeat(" ", depth)
 		if depth > LimitDepthPrint {
-			buffer.WriteString(fmt.Sprintf("\n\t%s%s |-> %s %d left", tabs, spaces, "...", orderList.Length-LimitDepthPrint))
+			buffer.WriteString(fmt.Sprintf("\n\t%s%s |-> %s %d left", tabs, spaces, "...",
+				orderList.Item.Length-LimitDepthPrint))
 			break
 		}
 		buffer.WriteString(fmt.Sprintf("\n\t%s%s |-> %s", tabs, spaces, linkedList.String()))
-		linkedList = linkedList.NextOrder
+		linkedList = orderList.GetOrder(linkedList.Item.NextOrder)
 	}
 	buffer.WriteString("\n\t")
 	buffer.WriteString(tabs)
 	buffer.WriteString("Tail:")
-	linkedList = orderList.TailOrder
+	linkedList = orderList.GetOrder(orderList.Item.TailOrder)
 	depth = 0
 	for linkedList != nil {
 		depth++
 		spaces := strings.Repeat(" ", depth)
 		if depth > LimitDepthPrint {
-			buffer.WriteString(fmt.Sprintf("\n\t%s%s <-| %s %d left", tabs, spaces, "...", orderList.Length-LimitDepthPrint))
+			buffer.WriteString(fmt.Sprintf("\n\t%s%s <-| %s %d left", tabs, spaces, "...",
+				orderList.Item.Length-LimitDepthPrint))
 			break
 		}
 		buffer.WriteString(fmt.Sprintf("\n\t%s%s <-| %s", tabs, spaces, linkedList.String()))
-		linkedList = linkedList.PrevOrder
+		linkedList = orderList.GetOrder(linkedList.Item.PrevOrder)
 	}
 	buffer.WriteString("\n")
 	buffer.WriteString(tabs)
@@ -81,63 +133,123 @@ func (orderList *OrderList) String(startDepth int) string {
 }
 
 // Less : compare if this order list is less than compared object
-func (orderList *OrderList) Less(than Item) bool {
+func (orderList *OrderList) Less(than *OrderList) bool {
 	// cast to OrderList pointer
-	return orderList.Price.LessThan(than.(*OrderList).Price)
+	return orderList.Item.Price.LessThan(than.Item.Price)
+}
+
+func (orderList *OrderList) Save() {
+	value, err := rlp.EncodeToBytes(orderList.Item)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	// we use orderlist db file seperated from order
+	// orderList.db.Put(orderList.Key, value)
+	orderList.orderTree.PriceTree.Put(orderList.Key, value)
+	fmt.Printf("Save %x, value :%x\n", orderList.Key, value)
+}
+
+func (orderList *OrderList) SaveOrder(order *Order) {
+	value, err := rlp.EncodeToBytes(order.Item)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// using other db to store Order object
+	orderList.orderDB.Put(order.Key, value)
+	fmt.Printf("Save %x, value :%x\n", order.Key, value)
 }
 
 // AppendOrder : append order into the order list
 func (orderList *OrderList) AppendOrder(order *Order) {
-	if orderList.Length == 0 {
-		order.NextOrder = nil
-		order.PrevOrder = nil
-		orderList.HeadOrder = order
-		orderList.TailOrder = order
+	if orderList.Item.Length == 0 {
+		// order.NextOrder = nil
+		// order.PrevOrder = nil
+		order.Item.NextOrder = emptyKey
+		order.Item.PrevOrder = emptyKey
+
+		orderList.Item.HeadOrder = order.Key
+		orderList.Item.TailOrder = order.Key
+
 	} else {
-		order.PrevOrder = orderList.TailOrder
-		order.NextOrder = nil
-		orderList.TailOrder.NextOrder = order
-		orderList.TailOrder = order
+		order.Item.PrevOrder = orderList.Item.TailOrder
+		order.Item.NextOrder = emptyKey
+		tailOrder := orderList.GetOrder(orderList.Item.TailOrder)
+		if tailOrder != nil {
+			tailOrder.Item.NextOrder = order.Key
+			orderList.Item.TailOrder = order.Key
+			orderList.SaveOrder(tailOrder)
+		}
 	}
-	orderList.Length++
-	orderList.Volume = orderList.Volume.Add(order.Quantity)
+	orderList.Item.Length++
+	orderList.Item.Volume = orderList.Item.Volume.Add(order.Item.Quantity)
+
+	orderList.SaveOrder(order)
+	orderList.Save()
 }
 
 // RemoveOrder : remove order from the order list
 func (orderList *OrderList) RemoveOrder(order *Order) {
-	orderList.Volume = orderList.Volume.Sub(order.Quantity)
-	orderList.Length--
-	if orderList.Length == 0 {
+	orderList.Item.Volume = orderList.Item.Volume.Sub(order.Item.Quantity)
+	orderList.Item.Length--
+	if orderList.Item.Length == 0 {
 		return
 	}
 
-	nextOrder := order.NextOrder
-	prevOrder := order.PrevOrder
+	nextOrder := orderList.GetOrder(order.Item.NextOrder)
+	prevOrder := orderList.GetOrder(order.Item.PrevOrder)
 
 	if nextOrder != nil && prevOrder != nil {
-		nextOrder.PrevOrder = prevOrder
-		prevOrder.NextOrder = nextOrder
+		nextOrder.Item.PrevOrder = prevOrder.Key
+		prevOrder.Item.NextOrder = nextOrder.Key
+
+		orderList.SaveOrder(nextOrder)
+		orderList.SaveOrder(prevOrder)
 	} else if nextOrder != nil {
-		nextOrder.PrevOrder = nil
-		orderList.HeadOrder = nextOrder
+		nextOrder.Item.PrevOrder = emptyKey
+		orderList.Item.HeadOrder = nextOrder.Key
+
+		orderList.SaveOrder(nextOrder)
 	} else if prevOrder != nil {
-		prevOrder.NextOrder = nil
-		orderList.TailOrder = prevOrder
+		prevOrder.Item.NextOrder = emptyKey
+		orderList.Item.TailOrder = prevOrder.Key
+
+		orderList.SaveOrder(prevOrder)
 	}
+
+	orderList.Save()
 }
 
 // MoveToTail : move order to the end of the order list
 func (orderList *OrderList) MoveToTail(order *Order) {
-	if order.PrevOrder != nil { // This Order is not the first Order in the OrderList
-		order.PrevOrder.NextOrder = order.NextOrder // Link the previous Order to the next Order, then move the Order to tail
+	if !orderList.isEmptyKey(order.Item.PrevOrder) { // This Order is not the first Order in the OrderList
+		prevOrder := orderList.GetOrder(order.Item.PrevOrder)
+		if prevOrder != nil {
+			prevOrder.Item.NextOrder = order.Item.NextOrder // Link the previous Order to the next Order, then move the Order to tail
+			orderList.SaveOrder(prevOrder)
+		}
+
 	} else { // This Order is the first Order in the OrderList
-		orderList.HeadOrder = order.NextOrder // Make next order the first
+		orderList.Item.HeadOrder = order.Item.NextOrder // Make next order the first
 	}
-	order.NextOrder.PrevOrder = order.PrevOrder
+
+	nextOrder := orderList.GetOrder(order.Item.NextOrder)
+	if nextOrder != nil {
+		nextOrder.Item.PrevOrder = order.Item.PrevOrder
+		orderList.SaveOrder(nextOrder)
+	}
 
 	// Move Order to the last position. Link up the previous last position Order.
-	orderList.TailOrder.NextOrder = order
-	orderList.TailOrder = order
+	tailOrder := orderList.GetOrder(orderList.Item.TailOrder)
+	if tailOrder != nil {
+		tailOrder.Item.NextOrder = order.Key
+		orderList.SaveOrder(tailOrder)
+	}
+
+	orderList.Item.TailOrder = order.Key
+	orderList.Save()
 }
 
 // String : travel the list to print it in nice format

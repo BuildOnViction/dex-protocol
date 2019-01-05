@@ -2,11 +2,13 @@ package orderbook
 
 import (
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/shopspring/decimal"
-	lane "gopkg.in/oleiade/lane.v1"
 )
 
 const (
@@ -16,77 +18,131 @@ const (
 	BID = "bid"
 )
 
+type OrderBookItem struct {
+	Time        int `json:"time"`
+	NextOrderID int `json:"nextOrderID"`
+}
+
 // OrderBook : list of orders
 type OrderBook struct {
-	Deque       *lane.Deque `json:"deque"`
-	Bids        *OrderTree  `json:"bids"`
-	Asks        *OrderTree  `json:"asks"`
-	Time        int         `json:"time"`
-	NextOrderID int         `json:"nextOrderID"`
+	db   *ethdb.LDBDatabase // this is for orderbook
+	Bids *OrderTree         `json:"bids"`
+	Asks *OrderTree         `json:"asks"`
+	Item *OrderBookItem
 }
 
 // NewOrderBook : return new order book
-func NewOrderBook() *OrderBook {
-	deque := lane.NewDeque()
-	bids := NewOrderTree()
-	asks := NewOrderTree()
-	return &OrderBook{
-		Deque:       deque,
-		Bids:        bids,
-		Asks:        asks,
+func NewOrderBook(datadir string) *OrderBook {
+
+	orderbookPath := path.Join(datadir, "orderbook")
+	bidsPath := path.Join(datadir, "bids")
+	asksPath := path.Join(datadir, "asks")
+	bids := NewOrderTree(bidsPath)
+	asks := NewOrderTree(asksPath)
+
+	db, _ := ethdb.NewLDBDatabase(orderbookPath, 0, 0)
+
+	item := &OrderBookItem{
+
 		Time:        0,
 		NextOrderID: 0,
 	}
+
+	orderbook := &OrderBook{
+		db:   db,
+		Bids: bids,
+		Asks: asks,
+		Item: item,
+	}
+
+	// orderbook.Restore()
+	return orderbook
 }
 
-func (orderBook *OrderBook) String(startDepth int) string {
+func (orderbook *OrderBook) Save() error {
+	batch := orderbook.db.NewBatch()
+
+	asksBytes, _ := rlp.EncodeToBytes(orderbook.Asks.Item)
+	bidsBytes, _ := rlp.EncodeToBytes(orderbook.Bids.Item)
+	orderbookBytes, _ := rlp.EncodeToBytes(orderbook.Item)
+
+	batch.Put([]byte("asks"), asksBytes)
+	batch.Put([]byte("bids"), bidsBytes)
+	batch.Put([]byte("orderbook"), orderbookBytes)
+
+	// commit
+	return batch.Write()
+}
+
+func (orderbook *OrderBook) Restore() {
+
+	if asksBytes, err := orderbook.db.Get([]byte("asks")); err != nil {
+		rlp.DecodeBytes(asksBytes, orderbook.Asks.Item)
+	}
+	if bidsBytes, err := orderbook.db.Get([]byte("bids")); err != nil {
+		rlp.DecodeBytes(bidsBytes, orderbook.Bids.Item)
+	}
+
+	if orderbookBytes, err := orderbook.db.Get([]byte("orderbook")); err != nil {
+		rlp.DecodeBytes(orderbookBytes, orderbook.Item)
+	}
+
+}
+
+// we need to store orderbook information as well
+// Volume    decimal.Decimal `json:"volume"`    // Contains total quantity from all Orders in tree
+// 	NumOrders int             `json:"numOrders"` // Contains count of Orders in tree
+// 	Depth
+
+func (orderbook *OrderBook) String(startDepth int) string {
 	tabs := strings.Repeat("\t", startDepth)
 	return fmt.Sprintf("{\n\t%sBids: %s\n\t%sAsks: %s\n\t%sTime: %d\n\t%sNextOrderID: %d\n%s}\n",
-		tabs, orderBook.Bids.String(startDepth+1), tabs, orderBook.Asks.String(startDepth+1), tabs, orderBook.Time, tabs, orderBook.NextOrderID, tabs)
+		tabs, orderbook.Bids.String(startDepth+1), tabs, orderbook.Asks.String(startDepth+1), tabs,
+		orderbook.Item.Time, tabs, orderbook.Item.NextOrderID, tabs)
 }
 
 // UpdateTime : update time for order book
-func (orderBook *OrderBook) UpdateTime() {
-	orderBook.Time++
+func (orderbook *OrderBook) UpdateTime() {
+	orderbook.Item.Time++
 }
 
 // BestBid : get the best bid of the order book
-func (orderBook *OrderBook) BestBid() (value decimal.Decimal) {
-	return orderBook.Bids.MaxPrice()
+func (orderbook *OrderBook) BestBid() (value decimal.Decimal) {
+	return orderbook.Bids.MaxPrice()
 }
 
 // BestAsk : get the best ask of the order book
-func (orderBook *OrderBook) BestAsk() (value decimal.Decimal) {
-	return orderBook.Asks.MinPrice()
+func (orderbook *OrderBook) BestAsk() (value decimal.Decimal) {
+	return orderbook.Asks.MinPrice()
 }
 
 // WorstBid : get the worst bid of the order book
-func (orderBook *OrderBook) WorstBid() (value decimal.Decimal) {
-	return orderBook.Bids.MinPrice()
+func (orderbook *OrderBook) WorstBid() (value decimal.Decimal) {
+	return orderbook.Bids.MinPrice()
 }
 
 // WorstAsk : get the worst ask of the order book
-func (orderBook *OrderBook) WorstAsk() (value decimal.Decimal) {
-	return orderBook.Asks.MaxPrice()
+func (orderbook *OrderBook) WorstAsk() (value decimal.Decimal) {
+	return orderbook.Asks.MaxPrice()
 }
 
 // processMarketOrder : process the market order
-func (orderBook *OrderBook) processMarketOrder(quote map[string]string, verbose bool) []map[string]string {
+func (orderbook *OrderBook) processMarketOrder(quote map[string]string, verbose bool) []map[string]string {
 	var trades []map[string]string
 	quantityToTrade, _ := decimal.NewFromString(quote["quantity"])
 	side := quote["side"]
 	var newTrades []map[string]string
 
 	if side == BID {
-		for quantityToTrade.GreaterThan(decimal.Zero) && orderBook.Asks.Length() > 0 {
-			bestPriceAsks := orderBook.Asks.MinPriceList()
-			quantityToTrade, newTrades = orderBook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
+		for quantityToTrade.GreaterThan(decimal.Zero) && orderbook.Asks.NotEmpty() {
+			bestPriceAsks := orderbook.Asks.MinPriceList()
+			quantityToTrade, newTrades = orderbook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 		}
 	} else if side == ASK {
-		for quantityToTrade.GreaterThan(decimal.Zero) && orderBook.Bids.Length() > 0 {
-			bestPriceBids := orderBook.Bids.MaxPriceList()
-			quantityToTrade, newTrades = orderBook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
+		for quantityToTrade.GreaterThan(decimal.Zero) && orderbook.Bids.NotEmpty() {
+			bestPriceBids := orderbook.Bids.MaxPriceList()
+			quantityToTrade, newTrades = orderbook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 		}
 	}
@@ -95,7 +151,7 @@ func (orderBook *OrderBook) processMarketOrder(quote map[string]string, verbose 
 
 // processLimitOrder : process the limit order, can change the quote
 // If not care for performance, we should make a copy of quote to prevent further reference problem
-func (orderBook *OrderBook) processLimitOrder(quote map[string]string, verbose bool) ([]map[string]string, map[string]string) {
+func (orderbook *OrderBook) processLimitOrder(quote map[string]string, verbose bool) ([]map[string]string, map[string]string) {
 	var trades []map[string]string
 	quantityToTrade, _ := decimal.NewFromString(quote["quantity"])
 	side := quote["side"]
@@ -105,34 +161,34 @@ func (orderBook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 	var orderInBook map[string]string
 
 	if side == BID {
-		minPrice := orderBook.Asks.MinPrice()
-		for quantityToTrade.GreaterThan(decimal.Zero) && orderBook.Asks.Length() > 0 && price.GreaterThanOrEqual(minPrice) {
-			bestPriceAsks := orderBook.Asks.MinPriceList()
-			quantityToTrade, newTrades = orderBook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
+		minPrice := orderbook.Asks.MinPrice()
+		for quantityToTrade.GreaterThan(decimal.Zero) && orderbook.Asks.NotEmpty() && price.GreaterThanOrEqual(minPrice) {
+			bestPriceAsks := orderbook.Asks.MinPriceList()
+			quantityToTrade, newTrades = orderbook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
-			minPrice = orderBook.Asks.MinPrice()
+			minPrice = orderbook.Asks.MinPrice()
 		}
 
 		if quantityToTrade.GreaterThan(decimal.Zero) {
-			quote["order_id"] = strconv.Itoa(orderBook.NextOrderID)
+			quote["order_id"] = strconv.Itoa(orderbook.Item.NextOrderID)
 			quote["quantity"] = quantityToTrade.String()
-			orderBook.Bids.InsertOrder(quote)
+			orderbook.Bids.InsertOrder(quote)
 			orderInBook = quote
 		}
 
 	} else if side == "ask" {
-		maxPrice := orderBook.Bids.MaxPrice()
-		for quantityToTrade.GreaterThan(decimal.Zero) && orderBook.Bids.Length() > 0 && price.LessThanOrEqual(maxPrice) {
-			bestPriceBids := orderBook.Bids.MaxPriceList()
-			quantityToTrade, newTrades = orderBook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
+		maxPrice := orderbook.Bids.MaxPrice()
+		for quantityToTrade.GreaterThan(decimal.Zero) && orderbook.Bids.NotEmpty() && price.LessThanOrEqual(maxPrice) {
+			bestPriceBids := orderbook.Bids.MaxPriceList()
+			quantityToTrade, newTrades = orderbook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
-			maxPrice = orderBook.Bids.MaxPrice()
+			maxPrice = orderbook.Bids.MaxPrice()
 		}
 
 		if quantityToTrade.GreaterThan(decimal.Zero) {
-			quote["order_id"] = strconv.Itoa(orderBook.NextOrderID)
+			quote["order_id"] = strconv.Itoa(orderbook.Item.NextOrderID)
 			quote["quantity"] = quantityToTrade.String()
-			orderBook.Asks.InsertOrder(quote)
+			orderbook.Asks.InsertOrder(quote)
 			orderInBook = quote
 		}
 	}
@@ -140,125 +196,128 @@ func (orderBook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 }
 
 // ProcessOrder : process the order
-func (orderBook *OrderBook) ProcessOrder(quote map[string]string, verbose bool) ([]map[string]string, map[string]string) {
+func (orderbook *OrderBook) ProcessOrder(quote map[string]string, verbose bool) ([]map[string]string, map[string]string) {
 	orderType := quote["type"]
 	var orderInBook map[string]string
 	var trades []map[string]string
 
-	orderBook.UpdateTime()
-	// quote["timestamp"] = strconv.Itoa(orderBook.Time)
-	orderBook.NextOrderID++
+	orderbook.UpdateTime()
+	// quote["timestamp"] = strconv.Itoa(orderbook.Time)
+	orderbook.Item.NextOrderID++
 
 	if orderType == "market" {
-		trades = orderBook.processMarketOrder(quote, verbose)
+		trades = orderbook.processMarketOrder(quote, verbose)
 	} else {
-		trades, orderInBook = orderBook.processLimitOrder(quote, verbose)
+		trades, orderInBook = orderbook.processLimitOrder(quote, verbose)
 	}
 	return trades, orderInBook
 }
 
 // processOrderList : process the order list
-func (orderBook *OrderBook) processOrderList(side string, orderList *OrderList, quantityStillToTrade decimal.Decimal, quote map[string]string, verbose bool) (decimal.Decimal, []map[string]string) {
+func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, quantityStillToTrade decimal.Decimal, quote map[string]string, verbose bool) (decimal.Decimal, []map[string]string) {
 	quantityToTrade := quantityStillToTrade
 	var trades []map[string]string
 
-	for orderList.Length > 0 && quantityToTrade.GreaterThan(decimal.Zero) {
-		headOrder := orderList.HeadOrder
-		tradedPrice := headOrder.Price
+	for orderList.Item.Length > 0 && quantityToTrade.GreaterThan(decimal.Zero) {
+		headOrder := orderList.GetOrder(orderList.Item.HeadOrder)
+		tradedPrice := headOrder.Item.Price
 
 		var newBookQuantity decimal.Decimal
 		var tradedQuantity decimal.Decimal
 
-		if quantityToTrade.LessThan(headOrder.Quantity) {
+		if quantityToTrade.LessThan(headOrder.Item.Quantity) {
 			tradedQuantity = quantityToTrade
 			// Do the transaction
-			newBookQuantity = headOrder.Quantity.Sub(quantityToTrade)
-			headOrder.UpdateQuantity(newBookQuantity, headOrder.Timestamp)
+			newBookQuantity = headOrder.Item.Quantity.Sub(quantityToTrade)
+			headOrder.UpdateQuantity(orderList, newBookQuantity, headOrder.Item.Timestamp)
 			quantityToTrade = decimal.Zero
 
-		} else if quantityToTrade.Equal(headOrder.Quantity) {
+		} else if quantityToTrade.Equal(headOrder.Item.Quantity) {
 			tradedQuantity = quantityToTrade
 			if side == BID {
-				orderBook.Bids.RemoveOrderByID(headOrder.OrderID)
+				orderbook.Bids.RemoveOrderByID(headOrder.Key)
 			} else {
-				orderBook.Asks.RemoveOrderByID(headOrder.OrderID)
+				orderbook.Asks.RemoveOrderByID(headOrder.Key)
 			}
 			quantityToTrade = decimal.Zero
 
 		} else {
-			tradedQuantity = headOrder.Quantity
+			tradedQuantity = headOrder.Item.Quantity
 			if side == BID {
-				orderBook.Bids.RemoveOrderByID(headOrder.OrderID)
+				orderbook.Bids.RemoveOrderByID(headOrder.Key)
 			} else {
-				orderBook.Asks.RemoveOrderByID(headOrder.OrderID)
+				orderbook.Asks.RemoveOrderByID(headOrder.Key)
 			}
 		}
 
 		if verbose {
 			fmt.Printf("TRADE: Time - %d, Price - %s, Quantity - %s, TradeID - %s, Matching TradeID - %s\n",
-				orderBook.Time, tradedPrice, tradedQuantity, headOrder.TradeID, quote["trade_id"])
+				orderbook.Item.Time, tradedPrice, tradedQuantity, headOrder.Item.TradeID, quote["trade_id"])
 		}
 
 		transactionRecord := make(map[string]string)
-		transactionRecord["timestamp"] = strconv.Itoa(orderBook.Time)
+		transactionRecord["timestamp"] = strconv.Itoa(orderbook.Item.Time)
 		transactionRecord["price"] = tradedPrice.String()
 		transactionRecord["quantity"] = tradedQuantity.String()
-		transactionRecord["time"] = strconv.Itoa(orderBook.Time)
+		transactionRecord["time"] = strconv.Itoa(orderbook.Item.Time)
 
-		orderBook.Deque.Append(transactionRecord)
 		trades = append(trades, transactionRecord)
 	}
 	return quantityToTrade, trades
 }
 
 // CancelOrder : cancel the order
-func (orderBook *OrderBook) CancelOrder(side string, orderID int) {
-	orderBook.UpdateTime()
-
+func (orderbook *OrderBook) CancelOrder(side string, orderID int) {
+	orderbook.UpdateTime()
+	key := []byte(strconv.Itoa(orderID))
 	if side == BID {
-		if orderBook.Bids.OrderExist(strconv.Itoa(orderID)) {
-			orderBook.Bids.RemoveOrderByID(strconv.Itoa(orderID))
+		if orderbook.Bids.OrderExist(key) {
+			orderbook.Bids.RemoveOrderByID(key)
 		}
 	} else {
-		if orderBook.Asks.OrderExist(strconv.Itoa(orderID)) {
-			orderBook.Asks.RemoveOrderByID(strconv.Itoa(orderID))
+		if orderbook.Asks.OrderExist(key) {
+			orderbook.Asks.RemoveOrderByID(key)
 		}
 	}
 }
 
 // ModifyOrder : modify the order
-func (orderBook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID int) {
-	orderBook.UpdateTime()
+func (orderbook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID int) {
+	orderbook.UpdateTime()
 
 	side := quoteUpdate["side"]
 	quoteUpdate["order_id"] = strconv.Itoa(orderID)
-	quoteUpdate["timestamp"] = strconv.Itoa(orderBook.Time)
-
+	quoteUpdate["timestamp"] = strconv.Itoa(orderbook.Item.Time)
+	key := []byte(quoteUpdate["order_id"])
 	if side == BID {
-		if orderBook.Bids.OrderExist(strconv.Itoa(orderID)) {
-			orderBook.Bids.UpdateOrder(quoteUpdate)
+		if orderbook.Bids.OrderExist(key) {
+			orderbook.Bids.UpdateOrder(quoteUpdate)
 		}
 	} else {
-		if orderBook.Asks.OrderExist(strconv.Itoa(orderID)) {
-			orderBook.Asks.UpdateOrder(quoteUpdate)
+		if orderbook.Asks.OrderExist(key) {
+			orderbook.Asks.UpdateOrder(quoteUpdate)
 		}
 	}
 }
 
 // VolumeAtPrice : get volume at the current price
-func (orderBook *OrderBook) VolumeAtPrice(side string, price decimal.Decimal) decimal.Decimal {
+func (orderbook *OrderBook) VolumeAtPrice(side string, price decimal.Decimal) decimal.Decimal {
 	if side == BID {
 		volume := decimal.Zero
-		if orderBook.Bids.PriceExist(price) {
-			volume = orderBook.Bids.PriceList(price).Volume
+		if orderbook.Bids.PriceExist(price) {
+			orderList := orderbook.Bids.PriceList(price)
+			volume = orderList.Item.Volume
 		}
 		return volume
 
-	} else {
-		volume := decimal.Zero
-		if orderBook.Asks.PriceExist(price) {
-			volume = orderBook.Asks.PriceList(price).Volume
-		}
-		return volume
 	}
+
+	// other case
+	volume := decimal.Zero
+	if orderbook.Asks.PriceExist(price) {
+		orderList := orderbook.Asks.PriceList(price)
+		volume = orderList.Item.Volume
+	}
+	return volume
+
 }
