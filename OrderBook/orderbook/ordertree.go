@@ -291,7 +291,7 @@ func (orderTree *OrderTree) getOrderListItem(bytes []byte) *OrderListItem {
 	return item
 }
 
-func (orderTree *OrderTree) DecodeOrderList(bytes []byte) *OrderList {
+func (orderTree *OrderTree) decodeOrderList(bytes []byte) *OrderList {
 	item := orderTree.getOrderListItem(bytes)
 	return &OrderList{
 		Item:      item,
@@ -314,7 +314,6 @@ func (orderTree *OrderTree) MaxPrice() *big.Int {
 }
 
 // MinPrice : get the min price
-
 func (orderTree *OrderTree) MinPrice() *big.Int {
 	if orderTree.Item.Depth > 0 {
 		if bytes, found := orderTree.PriceTree.GetMin(); found {
@@ -331,7 +330,7 @@ func (orderTree *OrderTree) MinPrice() *big.Int {
 func (orderTree *OrderTree) MaxPriceList() *OrderList {
 	if orderTree.Item.Depth > 0 {
 		if bytes, found := orderTree.PriceTree.GetMax(); found {
-			return orderTree.DecodeOrderList(bytes)
+			return orderTree.decodeOrderList(bytes)
 		}
 	}
 	return nil
@@ -342,7 +341,7 @@ func (orderTree *OrderTree) MaxPriceList() *OrderList {
 func (orderTree *OrderTree) MinPriceList() *OrderList {
 	if orderTree.Item.Depth > 0 {
 		if bytes, found := orderTree.PriceTree.GetMin(); found {
-			return orderTree.DecodeOrderList(bytes)
+			return orderTree.decodeOrderList(bytes)
 		}
 	}
 	return nil
