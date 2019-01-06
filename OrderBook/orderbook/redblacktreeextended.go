@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package redblacktree
+package orderbook
 
 import (
 	"math/big"
@@ -10,13 +10,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
+	rbt "github.com/tomochain/orderbook/redblacktree"
 )
 
-func RLPEncodeToBytes(item *Item) ([]byte, error) {
+func RLPEncodeToBytes(item *rbt.Item) ([]byte, error) {
 	return rlp.EncodeToBytes(item)
 }
 
-func RLPDecodeBytes(bytes []byte, item *Item) error {
+func RLPDecodeBytes(bytes []byte, item *rbt.Item) error {
 	return rlp.DecodeBytes(bytes, item)
 }
 
@@ -40,7 +41,7 @@ func byte2bool(b byte) bool {
 	return false
 }
 
-func OffsetEncodeBytes(item *Item) ([]byte, error) {
+func OffsetEncodeBytes(item *rbt.Item) ([]byte, error) {
 	start := 3 * common.HashLength
 	totalLength := start + 2
 	if item.Value != nil {
@@ -67,11 +68,11 @@ func OffsetEncodeBytes(item *Item) ([]byte, error) {
 	return returnBytes, nil
 }
 
-func OffsetDecodeBytes(bytes []byte, item *Item) error {
+func OffsetDecodeBytes(bytes []byte, item *rbt.Item) error {
 	start := 3 * common.HashLength
 	totalLength := len(bytes)
 	if item.Keys == nil {
-		item.Keys = &KeyMeta{
+		item.Keys = &rbt.KeyMeta{
 			Left:   make([]byte, common.HashLength),
 			Right:  make([]byte, common.HashLength),
 			Parent: make([]byte, common.HashLength),
@@ -96,7 +97,7 @@ func OffsetDecodeBytes(bytes []byte, item *Item) error {
 
 // RedBlackTreeExtended to demonstrate how to extend a RedBlackTree to include new functions
 type RedBlackTreeExtended struct {
-	*Tree
+	*rbt.Tree
 }
 
 func NewRedBlackTreeExtended(datadir string) *RedBlackTreeExtended {
@@ -105,7 +106,7 @@ func NewRedBlackTreeExtended(datadir string) *RedBlackTreeExtended {
 	obdb, _ := ethdb.NewLDBDatabase(datadir, 128, 1024)
 	emptyKey := make([]byte, common.HashLength)
 	// tree := &RedBlackTreeExtended{NewWithBytesComparator(RLPEncodeToBytes, RLPDecodeBytes, obdb)}
-	tree := &RedBlackTreeExtended{NewWithBytesComparator(OffsetEncodeBytes, OffsetDecodeBytes, emptyKey, obdb)}
+	tree := &RedBlackTreeExtended{rbt.NewWith(CmpBigInt, OffsetEncodeBytes, OffsetDecodeBytes, emptyKey, obdb)}
 
 	tree.FormatBytes = func(key []byte) string {
 		if len(key) == 0 || key == nil {
@@ -158,7 +159,7 @@ func (tree *RedBlackTreeExtended) RemoveMax() (value []byte, deleted bool) {
 	return nil, false
 }
 
-func (tree *RedBlackTreeExtended) getMinFromNode(node *Node) (foundNode *Node, found bool) {
+func (tree *RedBlackTreeExtended) getMinFromNode(node *rbt.Node) (foundNode *rbt.Node, found bool) {
 	if node == nil {
 		return nil, false
 	}
@@ -169,7 +170,7 @@ func (tree *RedBlackTreeExtended) getMinFromNode(node *Node) (foundNode *Node, f
 	return tree.getMinFromNode(nodeLeft)
 }
 
-func (tree *RedBlackTreeExtended) getMaxFromNode(node *Node) (foundNode *Node, found bool) {
+func (tree *RedBlackTreeExtended) getMaxFromNode(node *rbt.Node) (foundNode *rbt.Node, found bool) {
 	if node == nil {
 		return nil, false
 	}

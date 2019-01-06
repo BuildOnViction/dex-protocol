@@ -2,11 +2,9 @@ package orderbook
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"strconv"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/tomochain/backend-matching-engine/utils/math"
 )
 
 // Order : info that will be store in ipfs
@@ -32,7 +30,7 @@ type Order struct {
 }
 
 func (o *Order) String() string {
-	return ToJSON(o)
+	return fmt.Sprintf("key : %x, item: %s", o.Key, ToJSON(o.Item))
 }
 
 func (o *Order) GetNextOrder(orderList *OrderList) *Order {
@@ -50,9 +48,10 @@ func (o *Order) GetPrevOrder(orderList *OrderList) *Order {
 // NewOrder : create new order with quote ( can be ethereum address )
 func NewOrder(quote map[string]string, orderList []byte) *Order {
 	timestamp, _ := strconv.ParseUint(quote["timestamp"], 10, 64)
-	quantity, _ := new(big.Int).SetString(quote["quantity"], 10)
-	price, _ := new(big.Int).SetString(quote["price"], 10)
-	orderID := quote["order_id"]
+	quantity := ToBigInt(quote["quantity"])
+	price := ToBigInt(quote["price"])
+	orderID := ToBigInt(quote["order_id"])
+	key := GetKeyFromBig(orderID)
 	tradeID := quote["trade_id"]
 	orderItem := &OrderItem{
 		Timestamp: timestamp,
@@ -67,7 +66,7 @@ func NewOrder(quote map[string]string, orderList []byte) *Order {
 
 	// key should be Hash for compatible with smart contract
 	order := &Order{
-		Key:  common.StringToHash(orderID).Bytes(),
+		Key:  key,
 		Item: orderItem,
 	}
 
@@ -80,7 +79,7 @@ func (o *Order) UpdateQuantity(orderList *OrderList, newQuantity *big.Int, newTi
 		orderList.MoveToTail(o)
 	}
 	// update volume and modified timestamp
-	orderList.Item.Volume = math.Sub(orderList.Item.Volume, math.Sub(o.Item.Quantity, newQuantity))
+	orderList.Item.Volume = Sub(orderList.Item.Volume, Sub(o.Item.Quantity, newQuantity))
 	o.Item.Timestamp = newTimestamp
 	o.Item.Quantity = newQuantity
 

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/tomochain/backend-matching-engine/utils/math"
 )
 
 // Item : comparable
@@ -44,8 +43,11 @@ type OrderList struct {
 // NewOrderList : return new OrderList
 func NewOrderList(price *big.Int, orderTree *OrderTree) *OrderList {
 	item := &OrderListItem{
-		HeadOrder: nil,
-		TailOrder: nil,
+		// HeadOrder: nil,
+		// TailOrder: nil,
+		// set to default common.Hash
+		HeadOrder: orderTree.PriceTree.EmptyKey,
+		TailOrder: orderTree.PriceTree.EmptyKey,
 		Length:    0,
 		Volume:    big.NewInt(0),
 		Price:     price,
@@ -76,10 +78,16 @@ func (orderList *OrderList) GetOrder(key []byte) *Order {
 }
 
 func (orderList *OrderList) isEmptyKey(key []byte) bool {
-	return key == nil || len(key) == 0 || bytes.Equal(key, emptyKey)
+	return orderList.orderTree.PriceTree.IsEmptyKey(key)
 }
 
+// String : travel the list to print it in nice format
 func (orderList *OrderList) String(startDepth int) string {
+
+	if orderList == nil {
+		return "<nil>"
+	}
+
 	var buffer bytes.Buffer
 	tabs := strings.Repeat("\t", startDepth)
 	buffer.WriteString(fmt.Sprintf("{\n\t%sLength: %d\n\t%sVolume: %v\n\t%sPrice: %v",
@@ -177,7 +185,7 @@ func (orderList *OrderList) AppendOrder(order *Order) {
 		}
 	}
 	orderList.Item.Length++
-	orderList.Item.Volume = math.Add(orderList.Item.Volume, order.Item.Quantity)
+	orderList.Item.Volume = Add(orderList.Item.Volume, order.Item.Quantity)
 
 	orderList.SaveOrder(order)
 	orderList.Save()
@@ -185,7 +193,9 @@ func (orderList *OrderList) AppendOrder(order *Order) {
 
 // RemoveOrder : remove order from the order list
 func (orderList *OrderList) RemoveOrder(order *Order) {
-	orderList.Item.Volume = math.Sub(orderList.Item.Volume, order.Item.Quantity)
+	// fmt.Println("OrderItem", ToJSON(orderList.Item))
+	orderList.Item.Volume = Sub(orderList.Item.Volume, order.Item.Quantity)
+
 	orderList.Item.Length--
 	if orderList.Item.Length == 0 {
 		return
@@ -244,5 +254,3 @@ func (orderList *OrderList) MoveToTail(order *Order) {
 	orderList.Item.TailOrder = order.Key
 	orderList.Save()
 }
-
-// String : travel the list to print it in nice format

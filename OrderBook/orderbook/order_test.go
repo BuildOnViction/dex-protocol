@@ -5,8 +5,6 @@ import (
 	"math/big"
 	"strconv"
 	"testing"
-
-	"github.com/tomochain/backend-matching-engine/utils/math"
 )
 
 func TestNewOrder(t *testing.T) {
@@ -17,7 +15,7 @@ func TestNewOrder(t *testing.T) {
 	dummyOrder["price"] = testPrice.String()
 	dummyOrder["order_id"] = strconv.Itoa(testOrderID)
 	dummyOrder["trade_id"] = strconv.Itoa(testTradeID)
-	priceKey := testOrderTree.getKeyFromPrice(testPrice)
+	priceKey := GetKeyFromBig(testPrice)
 	order := NewOrder(dummyOrder, priceKey)
 
 	t.Logf("Order : %s", order)
@@ -66,14 +64,14 @@ func TestOrder(t *testing.T) {
 	}
 
 	// log in json format
-	var i int64 = 1
+	var i int64 = 4
 	for ; i < 10; i++ {
 		increment := big.NewInt(i)
 		dummyOrder1 := make(map[string]string)
 		dummyOrder1["timestamp"] = strconv.FormatUint(testTimestamp1, 10)
 		dummyOrder1["quantity"] = testQuanity1.String()
-		dummyOrder1["price"] = math.Add(testPrice1, increment).String()
-		dummyOrder1["order_id"] = dummyOrder1["price"]
+		dummyOrder1["price"] = Add(testPrice1, increment).String()
+		dummyOrder1["order_id"] = increment.String()
 		dummyOrder1["trade_id"] = strconv.Itoa(testTradeID1)
 
 		order1 := NewOrder(dummyOrder1, orderList.Key)

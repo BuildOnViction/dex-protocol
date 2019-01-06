@@ -1,7 +1,6 @@
 package orderbook
 
 import (
-	"math/big"
 	"testing"
 )
 
@@ -10,24 +9,24 @@ func TestNewOrderBook(t *testing.T) {
 	// // try to restore before next operation
 	// orderBook.Restore()
 
-	if orderBook.VolumeAtPrice(BID, Zero).Cmp(Zero) != 0 {
-		t.Errorf("orderBook.VolumeAtPrice incorrect, got: %d, want: %d.", orderBook.VolumeAtPrice(BID, Zero), Zero)
+	if orderBook.VolumeAtPrice(BID, Zero()).Cmp(Zero()) != 0 {
+		t.Errorf("orderBook.VolumeAtPrice incorrect, got: %d, want: %d.", orderBook.VolumeAtPrice(BID, Zero()), Zero())
 	}
 
-	if orderBook.BestAsk().Cmp(Zero) != 0 {
-		t.Errorf("orderBook.BestAsk incorrect, got: %d, want: %d.", orderBook.BestAsk(), Zero)
+	if orderBook.BestAsk().Cmp(Zero()) != 0 {
+		t.Errorf("orderBook.BestAsk incorrect, got: %d, want: %d.", orderBook.BestAsk(), Zero())
 	}
 
-	if orderBook.WorstBid().Cmp(Zero) != 0 {
-		t.Errorf("orderBook.WorstBid incorrect, got: %d, want: %d.", orderBook.WorstBid(), Zero)
+	if orderBook.WorstBid().Cmp(Zero()) != 0 {
+		t.Errorf("orderBook.WorstBid incorrect, got: %d, want: %d.", orderBook.WorstBid(), Zero())
 	}
 
-	if orderBook.WorstAsk().Cmp(Zero) != 0 {
-		t.Errorf("orderBook.WorstAsk incorrect, got: %d, want: %d.", orderBook.WorstAsk(), Zero)
+	if orderBook.WorstAsk().Cmp(Zero()) != 0 {
+		t.Errorf("orderBook.WorstAsk incorrect, got: %d, want: %d.", orderBook.WorstAsk(), Zero())
 	}
 
-	if orderBook.BestBid().Cmp(Zero) != 0 {
-		t.Errorf("orderBook.BestBid incorrect, got: %d, want: %d.", orderBook.BestBid(), Zero)
+	if orderBook.BestBid().Cmp(Zero()) != 0 {
+		t.Errorf("orderBook.BestBid incorrect, got: %d, want: %d.", orderBook.BestBid(), Zero())
 	}
 }
 
@@ -116,28 +115,28 @@ func TestOrderBook(t *testing.T) {
 		orderBook.ProcessOrder(order, true)
 	}
 
-	value, _ := new(big.Int).SetString("101", 10)
+	value := ToBigInt("101")
 	if orderBook.BestAsk().Cmp(value) != 0 {
 		t.Errorf("orderBook.BestAsk incorrect, got: %v, want: %v.", orderBook.BestAsk(), value)
 	}
 
-	value, _ = new(big.Int).SetString("103", 10)
+	value = ToBigInt("103")
 	if orderBook.WorstAsk().Cmp(value) != 0 {
 		t.Errorf("orderBook.WorstAsk incorrect, got: %v, want: %v.", orderBook.WorstAsk(), value)
 	}
 
-	value, _ = new(big.Int).SetString("99", 10)
+	value = ToBigInt("99")
 	if orderBook.BestBid().Cmp(value) != 0 {
 		t.Errorf("orderBook.BestBid incorrect, got: %v, want: %v.", orderBook.BestBid(), value)
 	}
 
-	value, _ = new(big.Int).SetString("97", 10)
+	value = ToBigInt("97")
 	if orderBook.WorstBid().Cmp(value) != 0 {
 		t.Errorf("orderBook.WorstBid incorrect, got: %v, want: %v.", orderBook.WorstBid(), value)
 	}
 
-	value, _ = new(big.Int).SetString("15", 10)
-	pricePoint, _ := new(big.Int).SetString("101", 10)
+	value = ToBigInt("15")
+	pricePoint := ToBigInt("101")
 	if orderBook.VolumeAtPrice(ASK, pricePoint).Cmp(value) != 0 {
 		t.Errorf("orderBook.VolumeAtPrice incorrect, got: %v, want: %v.", orderBook.VolumeAtPrice(ASK, pricePoint), value)
 	}

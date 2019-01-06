@@ -47,7 +47,7 @@ func (node *Node) maximumNode(tree *Tree) *Node {
 	if node == nil {
 		return nil
 	}
-	for !tree.isEmptyKey(node.RightKey()) {
+	for !tree.IsEmptyKey(node.RightKey()) {
 		node = node.Right(tree)
 	}
 	return node
@@ -126,18 +126,18 @@ func (node *Node) Value() []byte {
 }
 
 func (node *Node) grandparent(tree *Tree) *Node {
-	if node != nil && !tree.isEmptyKey(node.ParentKey()) {
+	if node != nil && !tree.IsEmptyKey(node.ParentKey()) {
 		return node.Parent(tree).Parent(tree)
 	}
 	return nil
 }
 
 func (node *Node) uncle(tree *Tree) *Node {
-	if node == nil || tree.isEmptyKey(node.ParentKey()) {
+	if node == nil || tree.IsEmptyKey(node.ParentKey()) {
 		return nil
 	}
 	parent := node.Parent(tree)
-	// if tree.isEmptyKey(parent.ParentKey()) {
+	// if tree.IsEmptyKey(parent.ParentKey()) {
 	// 	return nil
 	// }
 
@@ -145,7 +145,7 @@ func (node *Node) uncle(tree *Tree) *Node {
 }
 
 func (node *Node) sibling(tree *Tree) *Node {
-	if node == nil || tree.isEmptyKey(node.ParentKey()) {
+	if node == nil || tree.IsEmptyKey(node.ParentKey()) {
 		return nil
 	}
 	parent := node.Parent(tree)

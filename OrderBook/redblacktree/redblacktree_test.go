@@ -29,105 +29,6 @@ func TestLevelDB(t *testing.T) {
 	t.Logf("value :%x, items : %s", value, item.Value)
 }
 
-func RLPEncodeToBytes(item *Item) ([]byte, error) {
-	return rlp.EncodeToBytes(item)
-}
-
-func RLPDecodeBytes(bytes []byte, item *Item) error {
-	return rlp.DecodeBytes(bytes, item)
-}
-
-const (
-	trueByte  = byte(1)
-	falseByte = byte(0)
-)
-
-func bool2byte(bln bool) byte {
-	if bln == true {
-		return trueByte
-	}
-
-	return falseByte
-}
-
-func byte2bool(b byte) bool {
-	if b == trueByte {
-		return true
-	}
-	return false
-}
-
-func OffsetEncodeBytes(item *Item) ([]byte, error) {
-	start := 3 * common.HashLength
-	totalLength := start + 2
-	if item.Value != nil {
-		totalLength += len(item.Value)
-	}
-
-	returnBytes := make([]byte, totalLength)
-
-	if item.Keys != nil {
-		copy(returnBytes[0:common.HashLength], item.Keys.Left)
-		copy(returnBytes[common.HashLength:2*common.HashLength], item.Keys.Right)
-		copy(returnBytes[2*common.HashLength:start], item.Keys.Parent)
-	}
-	returnBytes[start] = bool2byte(item.Color)
-	start++
-	returnBytes[start] = bool2byte(item.Deleted)
-	start++
-	if start < totalLength {
-		copy(returnBytes[start:], item.Value)
-	}
-
-	// fmt.Printf("value :%x\n", returnBytes)
-
-	return returnBytes, nil
-}
-
-func OffsetDecodeBytes(bytes []byte, item *Item) error {
-	start := 3 * common.HashLength
-	totalLength := len(bytes)
-	if item.Keys == nil {
-		item.Keys = &KeyMeta{
-			Left:   make([]byte, common.HashLength),
-			Right:  make([]byte, common.HashLength),
-			Parent: make([]byte, common.HashLength),
-		}
-	}
-	copy(item.Keys.Left, bytes[0:common.HashLength])
-	copy(item.Keys.Right, bytes[common.HashLength:2*common.HashLength])
-	copy(item.Keys.Parent, bytes[2*common.HashLength:start])
-	item.Color = byte2bool(bytes[start])
-	start++
-	item.Deleted = byte2bool(bytes[start])
-	start++
-	if start < totalLength {
-		item.Value = make([]byte, totalLength-start)
-		copy(item.Value, bytes[start:])
-	}
-
-	// fmt.Printf("Item key : %#v\n", item.Keys)
-
-	return nil
-}
-
-func NewTree(datadir string) *RedBlackTreeExtended {
-
-	obdb, _ := ethdb.NewLDBDatabase(datadir, 128, 1024)
-	emptyKey := make([]byte, common.HashLength)
-	// tree := &RedBlackTreeExtended{NewWithBytesComparator(RLPEncodeToBytes, RLPDecodeBytes, obdb)}
-	tree := &RedBlackTreeExtended{NewWithBytesComparator(OffsetEncodeBytes, OffsetDecodeBytes, emptyKey, obdb)}
-
-	tree.FormatBytes = func(key []byte) string {
-		if len(key) == 0 || key == nil {
-			return "<nil>"
-		}
-		return new(big.Int).SetBytes(key).String()
-	}
-
-	return tree
-}
-
 func getBig(value string) []byte {
 	bigValue, _ := new(big.Int).SetString(value, 10)
 	return common.BigToHash(bigValue).Bytes()
@@ -135,7 +36,7 @@ func getBig(value string) []byte {
 
 func TestManipulateLevelDBTree(t *testing.T) {
 	datadir := "datadir/agiletech/orderbook"
-	tree := NewTree(datadir)
+	tree := NewRedBlackTreeExtended(datadir)
 
 	start := time.Now()
 	tree.Put(getBig("1"), []byte("a")) // 1->a (in order)
@@ -172,7 +73,7 @@ func TestManipulateLevelDBTree(t *testing.T) {
 
 func TestRestoreLevelDBTree(t *testing.T) {
 	datadir := "datadir/agiletech/orderbook"
-	tree := NewTree(datadir)
+	tree := NewRedBlackTreeExtended(datadir)
 
 	tree.SetRootKey(getBig("2"))
 

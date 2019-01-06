@@ -9,7 +9,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/tomochain/backend-matching-engine/utils/math"
 )
 
 const (
@@ -18,8 +17,6 @@ const (
 	// BID : bid constant
 	BID = "bid"
 )
-
-var Zero = big.NewInt(0)
 
 type OrderBookItem struct {
 	Time        uint64 `json:"time"`
@@ -61,43 +58,44 @@ func NewOrderBook(datadir string) *OrderBook {
 		Item: item,
 	}
 
-	// orderbook.Restore()
+	orderbook.Restore()
+
 	return orderbook
 }
 
 func (orderbook *OrderBook) Save() error {
 
-	// commit price tree first
-	orderbook.Asks.PriceTree.Commit()
-	orderbook.Bids.PriceTree.Commit()
+	orderbook.Asks.Save()
+	orderbook.Bids.Save()
 
-	batch := orderbook.db.NewBatch()
-
-	asksBytes, _ := rlp.EncodeToBytes(orderbook.Asks.Item)
-	bidsBytes, _ := rlp.EncodeToBytes(orderbook.Bids.Item)
 	orderbookBytes, _ := rlp.EncodeToBytes(orderbook.Item)
 
-	batch.Put([]byte("asks"), asksBytes)
-	batch.Put([]byte("bids"), bidsBytes)
-	batch.Put([]byte("orderbook"), orderbookBytes)
+	// batch.Put([]byte("asks"), asksBytes)
+	// batch.Put([]byte("bids"), bidsBytes)
+	// batch.Put([]byte("orderbook"), orderbookBytes)
 
 	// commit
-	return batch.Write()
+	// return batch.Write()
+	return orderbook.db.Put([]byte("orderbook"), orderbookBytes)
 }
 
-func (orderbook *OrderBook) Restore() {
+func (orderbook *OrderBook) Restore() error {
 
-	if asksBytes, err := orderbook.db.Get([]byte("asks")); err != nil {
-		rlp.DecodeBytes(asksBytes, orderbook.Asks.Item)
-	}
-	if bidsBytes, err := orderbook.db.Get([]byte("bids")); err != nil {
-		rlp.DecodeBytes(bidsBytes, orderbook.Bids.Item)
-	}
+	// if asksBytes, err := orderbook.db.Get([]byte("asks")); err != nil {
+	// 	rlp.DecodeBytes(asksBytes, orderbook.Asks.Item)
+	// }
+	// if bidsBytes, err := orderbook.db.Get([]byte("bids")); err != nil {
+	// 	rlp.DecodeBytes(bidsBytes, orderbook.Bids.Item)
+	// }
 
-	if orderbookBytes, err := orderbook.db.Get([]byte("orderbook")); err != nil {
-		rlp.DecodeBytes(orderbookBytes, orderbook.Item)
-	}
+	orderbook.Asks.Restore()
+	orderbook.Bids.Restore()
 
+	orderbookBytes, err := orderbook.db.Get([]byte("orderbook"))
+	if err == nil {
+		return rlp.DecodeBytes(orderbookBytes, orderbook.Item)
+	}
+	return err
 }
 
 // we need to store orderbook information as well
@@ -140,18 +138,18 @@ func (orderbook *OrderBook) WorstAsk() (value *big.Int) {
 // processMarketOrder : process the market order
 func (orderbook *OrderBook) processMarketOrder(quote map[string]string, verbose bool) []map[string]string {
 	var trades []map[string]string
-	quantityToTrade, _ := new(big.Int).SetString(quote["quantity"], 10)
+	quantityToTrade := ToBigInt(quote["quantity"])
 	side := quote["side"]
 	var newTrades []map[string]string
 
 	if side == BID {
-		for quantityToTrade.Cmp(Zero) > 0 && orderbook.Asks.NotEmpty() {
+		for quantityToTrade.Cmp(Zero()) > 0 && orderbook.Asks.NotEmpty() {
 			bestPriceAsks := orderbook.Asks.MinPriceList()
 			quantityToTrade, newTrades = orderbook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 		}
 	} else if side == ASK {
-		for quantityToTrade.Cmp(Zero) > 0 && orderbook.Bids.NotEmpty() {
+		for quantityToTrade.Cmp(Zero()) > 0 && orderbook.Bids.NotEmpty() {
 			bestPriceBids := orderbook.Bids.MaxPriceList()
 			quantityToTrade, newTrades = orderbook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
@@ -164,23 +162,23 @@ func (orderbook *OrderBook) processMarketOrder(quote map[string]string, verbose 
 // If not care for performance, we should make a copy of quote to prevent further reference problem
 func (orderbook *OrderBook) processLimitOrder(quote map[string]string, verbose bool) ([]map[string]string, map[string]string) {
 	var trades []map[string]string
-	quantityToTrade, _ := new(big.Int).SetString(quote["quantity"], 10)
+	quantityToTrade := ToBigInt(quote["quantity"])
 	side := quote["side"]
-	price, _ := new(big.Int).SetString(quote["price"], 10)
+	price := ToBigInt(quote["price"])
 	var newTrades []map[string]string
 
 	var orderInBook map[string]string
 
 	if side == BID {
 		minPrice := orderbook.Asks.MinPrice()
-		for quantityToTrade.Cmp(Zero) > 0 && orderbook.Asks.NotEmpty() && price.Cmp(minPrice) >= 0 {
+		for quantityToTrade.Cmp(Zero()) > 0 && orderbook.Asks.NotEmpty() && price.Cmp(minPrice) >= 0 {
 			bestPriceAsks := orderbook.Asks.MinPriceList()
 			quantityToTrade, newTrades = orderbook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 			minPrice = orderbook.Asks.MinPrice()
 		}
 
-		if quantityToTrade.Cmp(Zero) > 0 {
+		if quantityToTrade.Cmp(Zero()) > 0 {
 			quote["order_id"] = strconv.FormatUint(orderbook.Item.NextOrderID, 10)
 			quote["quantity"] = quantityToTrade.String()
 			orderbook.Bids.InsertOrder(quote)
@@ -189,14 +187,14 @@ func (orderbook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 
 	} else if side == "ask" {
 		maxPrice := orderbook.Bids.MaxPrice()
-		for quantityToTrade.Cmp(Zero) > 0 && orderbook.Bids.NotEmpty() && price.Cmp(maxPrice) <= 0 {
+		for quantityToTrade.Cmp(Zero()) > 0 && orderbook.Bids.NotEmpty() && price.Cmp(maxPrice) <= 0 {
 			bestPriceBids := orderbook.Bids.MaxPriceList()
 			quantityToTrade, newTrades = orderbook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 			maxPrice = orderbook.Bids.MaxPrice()
 		}
 
-		if quantityToTrade.Cmp(Zero) > 0 {
+		if quantityToTrade.Cmp(Zero()) > 0 {
 			quote["order_id"] = strconv.FormatUint(orderbook.Item.NextOrderID, 10)
 			quote["quantity"] = quantityToTrade.String()
 			orderbook.Asks.InsertOrder(quote)
@@ -229,7 +227,7 @@ func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, 
 	quantityToTrade := quantityStillToTrade
 	var trades []map[string]string
 
-	for orderList.Item.Length > 0 && quantityToTrade.Cmp(Zero) > 0 {
+	for orderList.Item.Length > 0 && quantityToTrade.Cmp(Zero()) > 0 {
 		headOrder := orderList.GetOrder(orderList.Item.HeadOrder)
 		tradedPrice := headOrder.Item.Price
 
@@ -239,9 +237,9 @@ func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, 
 		if quantityToTrade.Cmp(headOrder.Item.Quantity) < 0 {
 			tradedQuantity = quantityToTrade
 			// Do the transaction
-			newBookQuantity = math.Sub(headOrder.Item.Quantity, quantityToTrade)
+			newBookQuantity = Sub(headOrder.Item.Quantity, quantityToTrade)
 			headOrder.UpdateQuantity(orderList, newBookQuantity, headOrder.Item.Timestamp)
-			quantityToTrade = Zero
+			quantityToTrade = big.NewInt(0)
 
 		} else if quantityToTrade.Cmp(headOrder.Item.Quantity) == 0 {
 			tradedQuantity = quantityToTrade
@@ -250,7 +248,7 @@ func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, 
 			} else {
 				orderbook.Asks.RemoveOrderByID(headOrder.Key)
 			}
-			quantityToTrade = Zero
+			quantityToTrade = big.NewInt(0)
 
 		} else {
 			tradedQuantity = headOrder.Item.Quantity
@@ -312,22 +310,20 @@ func (orderbook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID i
 
 // VolumeAtPrice : get volume at the current price
 func (orderbook *OrderBook) VolumeAtPrice(side string, price *big.Int) *big.Int {
+	volume := big.NewInt(0)
 	if side == BID {
-		volume := Zero
 		if orderbook.Bids.PriceExist(price) {
 			orderList := orderbook.Bids.PriceList(price)
-			volume = orderList.Item.Volume
+			volume = CloneBigInt(orderList.Item.Volume)
 		}
-		return volume
-
+	} else {
+		// other case
+		if orderbook.Asks.PriceExist(price) {
+			orderList := orderbook.Asks.PriceList(price)
+			volume = CloneBigInt(orderList.Item.Volume)
+		}
 	}
 
-	// other case
-	volume := Zero
-	if orderbook.Asks.PriceExist(price) {
-		orderList := orderbook.Asks.PriceList(price)
-		volume = orderList.Item.Volume
-	}
 	return volume
 
 }

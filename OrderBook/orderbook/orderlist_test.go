@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"strconv"
 	"testing"
-
-	"github.com/tomochain/backend-matching-engine/utils/math"
 )
 
 func TestNewOrderList(t *testing.T) {
@@ -19,7 +17,7 @@ func TestNewOrderList(t *testing.T) {
 		t.Errorf("Orderlist price incorrect, got: %d, want: %d.", orderList.Item.Price, testPrice)
 	}
 
-	if orderList.Item.Volume.Cmp(Zero) != 0 {
+	if orderList.Item.Volume.Cmp(Zero()) != 0 {
 		t.Errorf("Orderlist volume incorrect, got: %d, want: %d.", orderList.Item.Volume, 0)
 	}
 }
@@ -63,7 +61,7 @@ func TestOrderList(t *testing.T) {
 		t.Errorf("Orderlist Length incorrect, got: %d, want: %d.", orderList.Item.Length, 2)
 	}
 
-	orderListQuantity := math.Add(order.Item.Quantity, order1.Item.Quantity)
+	orderListQuantity := Add(order.Item.Quantity, order1.Item.Quantity)
 	if orderList.Item.Volume.Cmp(orderListQuantity) != 0 {
 		t.Errorf("Orderlist Length incorrect, got: %d, want: %d.", orderList.Item.Volume, orderListQuantity)
 	}

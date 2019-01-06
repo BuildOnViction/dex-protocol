@@ -8,6 +8,8 @@ import (
 func TestNewOrderTree(t *testing.T) {
 	orderTree := testOrderTree
 
+	// fmt.Println(ToJSON(orderTree.Item))
+
 	dummyOrder := make(map[string]string)
 	dummyOrder["timestamp"] = strconv.FormatUint(testTimestamp, 10)
 	dummyOrder["quantity"] = testQuanity.String()
@@ -36,12 +38,8 @@ func TestNewOrderTree(t *testing.T) {
 	dummyOrder3["order_id"] = strconv.Itoa(testOrderID3)
 	dummyOrder3["trade_id"] = strconv.Itoa(testTradeID3)
 
-	if orderTree.Item.Volume.Cmp(Zero) != 0 {
-		t.Errorf("orderTree.Volume incorrect, got: %d, want: %s.", orderTree.Item.Volume, Zero)
-	}
-
-	// if !(orderTree.NotEmpty()) {
-	// 	t.Errorf("orderTree.Length() incorrect, got: %d, want: %d.", orderTree.NotEmpty(), 0)
+	// if orderTree.Item.Volume.Cmp(Zero()) != 0 {
+	// 	t.Errorf("orderTree.Volume incorrect, got: %d, want: %s.", orderTree.Item.Volume, Zero())
 	// }
 
 	orderTree.InsertOrder(dummyOrder)
@@ -59,13 +57,19 @@ func TestNewOrderTree(t *testing.T) {
 		t.Errorf("orderTree.NumOrders incorrect, got: %d, want: %d.", orderTree.Item.NumOrders, 2)
 	}
 
-	orderTree.RemoveOrderByID([]byte(dummyOrder1["order_id"]))
-	orderTree.RemoveOrderByID([]byte(dummyOrder["order_id"]))
+	if !(orderTree.NotEmpty()) {
+		t.Errorf("orderTree.NotEmpty() incorrect, got: %t, want: %t.", orderTree.NotEmpty(), false)
+	}
 
-	orderTree.InsertOrder(dummyOrder)
-	orderTree.InsertOrder(dummyOrder1)
+	// orderTree.RemoveOrderByID(GetKeyFromBig(ToBigInt(dummyOrder["order_id"])))
+	// orderTree.RemoveOrderByID(GetKeyFromBig(ToBigInt(dummyOrder1["order_id"])))
+
+	// orderTree.InsertOrder(dummyOrder)
+	// orderTree.InsertOrder(dummyOrder1)
+
 	orderTree.InsertOrder(dummyOrder2)
 	orderTree.InsertOrder(dummyOrder3)
+
 	maxPrice := orderTree.MaxPrice()
 	minPrice := orderTree.MinPrice()
 	if maxPrice.Cmp(testPrice3) != 0 {
@@ -79,7 +83,7 @@ func TestNewOrderTree(t *testing.T) {
 	orderTree.RemovePrice(testPrice)
 
 	if orderTree.PriceExist(testPrice) {
-		t.Errorf("orderTree.MinPrice incorrect, got: %s, want: %s.", minPrice, testPrice)
+		t.Errorf("orderTree Price List incorrect, should be removed : %s.", testPrice)
 	}
 
 	t.Logf("OrderTree : %s", orderTree.String(0))
