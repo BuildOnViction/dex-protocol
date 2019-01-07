@@ -80,7 +80,7 @@ func (tree *Tree) SetRootKey(key []byte) {
 
 // Put inserts node into the tree.
 // Key should adhere to the comparator's type assertion, otherwise method panics.
-func (tree *Tree) Put(key []byte, value []byte) {
+func (tree *Tree) Put(key []byte, value []byte) error {
 	var insertedNode *Node
 	if tree.IsEmptyKey(tree.rootKey) {
 		// Assert key is of comparator's type for initial tree
@@ -100,7 +100,7 @@ func (tree *Tree) Put(key []byte, value []byte) {
 				item := &Item{Value: value, Keys: &KeyMeta{}}
 				node.Item = item
 				tree.Save(node)
-				return
+				return nil
 			case compare < 0:
 				if tree.IsEmptyKey(node.LeftKey()) {
 					node.LeftKey(key)
@@ -141,6 +141,7 @@ func (tree *Tree) Put(key []byte, value []byte) {
 
 	fmt.Println(tree)
 	// tree.size++
+	return nil
 }
 
 func (tree *Tree) GetNode(key []byte) (*Node, error) {

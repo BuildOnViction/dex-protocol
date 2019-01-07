@@ -61,11 +61,13 @@ func TestNewOrderTree(t *testing.T) {
 		t.Errorf("orderTree.NotEmpty() incorrect, got: %t, want: %t.", orderTree.NotEmpty(), false)
 	}
 
-	// orderTree.RemoveOrderByID(GetKeyFromBig(ToBigInt(dummyOrder["order_id"])))
-	// orderTree.RemoveOrderByID(GetKeyFromBig(ToBigInt(dummyOrder1["order_id"])))
+	orderKey := GetKeyFromBig(ToBigInt(dummyOrder["order_id"]))
+	orderTree.RemoveOrderByID(orderKey)
+	orderTree.InsertOrder(dummyOrder)
 
-	// orderTree.InsertOrder(dummyOrder)
-	// orderTree.InsertOrder(dummyOrder1)
+	orderKey1 := GetKeyFromBig(ToBigInt(dummyOrder1["order_id"]))
+	orderTree.RemoveOrderByID(orderKey1)
+	orderTree.InsertOrder(dummyOrder1)
 
 	orderTree.InsertOrder(dummyOrder2)
 	orderTree.InsertOrder(dummyOrder3)
@@ -80,6 +82,7 @@ func TestNewOrderTree(t *testing.T) {
 		t.Errorf("orderTree.MinPrice incorrect, got: %s, want: %s.", minPrice, testPrice)
 	}
 
+	// remove price does not affect the volumn, just affect the depth
 	orderTree.RemovePrice(testPrice)
 
 	if orderTree.PriceExist(testPrice) {

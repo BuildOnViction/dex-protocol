@@ -97,7 +97,7 @@ func (orderTree *OrderTree) NotEmpty() bool {
 	return iter.First()
 }
 
-func (orderTree *OrderTree) Order(key []byte) *Order {
+func (orderTree *OrderTree) GetOrder(key []byte) *Order {
 	bytes, err := orderTree.OrderDB.Get(key)
 	if err != nil {
 		fmt.Printf("Key not found :%x, %s\n", key, key)
@@ -198,11 +198,13 @@ func (orderTree *OrderTree) InsertOrder(quote map[string]string) {
 
 	if !orderTree.PriceExist(price) {
 		// create and save
+		fmt.Println("CREATE price list", price.String())
 		orderList = orderTree.CreatePrice(price)
 	} else {
 		orderList = orderTree.PriceList(price)
 	}
 
+	// order will be insert if there is a follow orderList key
 	if orderList != nil {
 		order := NewOrder(quote, orderList.Key)
 		orderList.AppendOrder(order)
@@ -227,7 +229,7 @@ func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 	orderID := ToBigInt(quote["order_id"])
 	key := GetKeyFromBig(orderID)
 
-	order := orderTree.Order(key)
+	order := orderTree.GetOrder(key)
 	originalQuantity := order.Item.Quantity
 	price := ToBigInt(quote["price"])
 	orderList := orderTree.PriceList(order.Item.Price)
@@ -257,31 +259,60 @@ func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 	orderTree.Save()
 }
 
-// RemoveOrderByID : remove info using orderID
-func (orderTree *OrderTree) RemoveOrderByID(key []byte) {
-
-	// order := orderTree.OrderMap[orderID]
-	order := orderTree.Order(key)
-	if order == nil {
-		return
-	}
-
+func (orderTree *OrderTree) RemoveOrder(order *Order) error {
 	// fmt.Printf("Node :%#v \n", order.Item)
 
-	orderTree.Item.Volume = Sub(orderTree.Item.Volume, order.Item.Quantity)
-	// get orderList by price
+	// then remove order from orderDB
+	// err := orderTree.OrderDB.Delete(order.Key)
+
+	// if err != nil {
+	// 	// stop other operations
+	// 	return err
+	// }
+
+	// fmt.Println(orderTree.String(0))
+
+	// get orderList by price, if there is orderlist, we will update it
 	orderList := orderTree.PriceList(order.Item.Price)
 	if orderList != nil {
-		orderList.RemoveOrder(order)
+		// next update orderList
+		err := orderList.RemoveOrder(order)
+
+		if err != nil {
+			return err
+		}
+
 		// no items left than safety remove
 		if orderList.Item.Length == 0 {
 			orderTree.RemovePrice(order.Item.Price)
+			fmt.Println("REMOVE price list", order.Item.Price.String())
 		}
+
+		// update orderTree
+		orderTree.Item.Volume = Sub(orderTree.Item.Volume, order.Item.Quantity)
+
 		// delete(orderTree.OrderMap, orderID)
 		orderTree.Item.NumOrders--
+
 		// should use batch to optimize the performance
-		orderTree.Save()
+		return orderTree.Save()
+
 	}
+
+	return nil
+
+}
+
+// RemoveOrderByID : remove info using orderID
+func (orderTree *OrderTree) RemoveOrderByID(key []byte) error {
+
+	// order := orderTree.OrderMap[orderID]
+	order := orderTree.GetOrder(key)
+	if order == nil {
+		return nil
+	}
+
+	return orderTree.RemoveOrder(order)
 
 }
 

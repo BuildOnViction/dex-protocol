@@ -74,7 +74,7 @@ func (orderList *OrderList) GetOrder(key []byte) *Order {
 	if orderList.isEmptyKey(key) {
 		return nil
 	}
-	return orderList.orderTree.Order(key)
+	return orderList.orderTree.GetOrder(key)
 }
 
 func (orderList *OrderList) isEmptyKey(key []byte) bool {
@@ -137,34 +137,45 @@ func (orderList *OrderList) Less(than *OrderList) bool {
 	return orderList.Item.Price.Cmp(than.Item.Price) < 0
 }
 
-func (orderList *OrderList) Save() {
+func (orderList *OrderList) Save() error {
 	value, err := rlp.EncodeToBytes(orderList.Item)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return err
 	}
 	// we use orderlist db file seperated from order
 	// orderList.db.Put(orderList.Key, value)
-	orderList.orderTree.PriceTree.Put(orderList.Key, value)
 	fmt.Printf("Save orderlist key %x, value :%x\n", orderList.Key, value)
+
+	return orderList.orderTree.PriceTree.Put(orderList.Key, value)
+
 }
 
-func (orderList *OrderList) SaveOrder(order *Order) {
+func (orderList *OrderList) SaveOrder(order *Order) error {
 	value, err := rlp.EncodeToBytes(order.Item)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return err
 	}
 
 	// using other db to store Order object
 	// key := common.BytesToHash(order.Key).Bytes()
 	key := order.Key
-	orderList.orderTree.OrderDB.Put(key, value)
 	fmt.Printf("Save order key : %x, value :%x\n", key, value)
+
+	return orderList.orderTree.OrderDB.Put(key, value)
+
 }
 
 // AppendOrder : append order into the order list
-func (orderList *OrderList) AppendOrder(order *Order) {
+func (orderList *OrderList) AppendOrder(order *Order) error {
+
+	// save into database first
+	err := orderList.SaveOrder(order)
+	if err != nil {
+		return err
+	}
+
 	if orderList.Item.Length == 0 {
 		// order.NextOrder = nil
 		// order.PrevOrder = nil
@@ -187,19 +198,25 @@ func (orderList *OrderList) AppendOrder(order *Order) {
 	orderList.Item.Length++
 	orderList.Item.Volume = Add(orderList.Item.Volume, order.Item.Quantity)
 
-	orderList.SaveOrder(order)
-	orderList.Save()
+	return orderList.Save()
 }
 
 // RemoveOrder : remove order from the order list
-func (orderList *OrderList) RemoveOrder(order *Order) {
-	// fmt.Println("OrderItem", ToJSON(orderList.Item))
-	orderList.Item.Volume = Sub(orderList.Item.Volume, order.Item.Quantity)
+func (orderList *OrderList) RemoveOrder(order *Order) error {
 
-	orderList.Item.Length--
-	if orderList.Item.Length == 0 {
-		return
+	err := orderList.orderTree.OrderDB.Delete(order.Key)
+	if err != nil {
+		return err
 	}
+
+	// fmt.Println("OrderItem", ToJSON(orderList.Item))
+	if orderList.Item.Length == 0 {
+		// empty mean nothing to delete
+		return nil
+	}
+
+	orderList.Item.Volume = Sub(orderList.Item.Volume, order.Item.Quantity)
+	orderList.Item.Length--
 
 	nextOrder := orderList.GetOrder(order.Item.NextOrder)
 	prevOrder := orderList.GetOrder(order.Item.PrevOrder)
@@ -222,7 +239,7 @@ func (orderList *OrderList) RemoveOrder(order *Order) {
 		orderList.SaveOrder(prevOrder)
 	}
 
-	orderList.Save()
+	return orderList.Save()
 }
 
 // MoveToTail : move order to the end of the order list
