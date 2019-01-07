@@ -1,6 +1,7 @@
 package orderbook
 
-var testOrderTree = NewOrderTree("../datadir/testing")
+var datadir = "../datadir/testing"
+var testOrderTree = NewOrderTree(datadir + "/ordertree")
 
 var testTimestamp uint64 = 123452342343
 var testQuanity = ToBigInt("1000")

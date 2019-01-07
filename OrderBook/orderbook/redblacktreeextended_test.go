@@ -1,4 +1,4 @@
-package redblacktree
+package orderbook
 
 import (
 	"math/big"
@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
+	rbt "github.com/tomochain/orderbook/redblacktree"
 )
 
 func print(tree *RedBlackTreeExtended, t *testing.T) {
@@ -20,13 +21,12 @@ func print(tree *RedBlackTreeExtended, t *testing.T) {
 
 func TestLevelDB(t *testing.T) {
 	// current running folder is this folder
-	datadir := "datadir/agiletech/orderbook"
 	obdb, _ := ethdb.NewLDBDatabase(datadir, 0, 0)
 	// obdb.Put([]byte("1"), []byte("a"))
 	value, _ := obdb.Get([]byte("2"))
-	item := &Item{}
+	item := &rbt.Item{}
 	rlp.DecodeBytes(value, item)
-	t.Logf("value :%x, items : %s", value, item.Value)
+	t.Logf("value :%x, items : %x", value, item.Value)
 }
 
 func getBig(value string) []byte {
@@ -35,7 +35,6 @@ func getBig(value string) []byte {
 }
 
 func TestManipulateLevelDBTree(t *testing.T) {
-	datadir := "datadir/agiletech/orderbook"
 	tree := NewRedBlackTreeExtended(datadir)
 
 	start := time.Now()
@@ -72,7 +71,6 @@ func TestManipulateLevelDBTree(t *testing.T) {
 }
 
 func TestRestoreLevelDBTree(t *testing.T) {
-	datadir := "datadir/agiletech/orderbook"
 	tree := NewRedBlackTreeExtended(datadir)
 
 	tree.SetRootKey(getBig("2"))

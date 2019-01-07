@@ -28,6 +28,7 @@ type Tree struct {
 	// batch   ethdb.Batch
 	rootKey []byte
 	cache   map[string]*Item
+	Debug   bool
 	// itemCache *lru.Cache // Cache for the recent node item
 	// size       int
 	Comparator    Comparator
@@ -157,6 +158,13 @@ func (tree *Tree) GetNode(key []byte) (*Node, error) {
 	if cached, ok := tree.cache[cacheKey]; ok {
 		item = cached
 	} else {
+
+		found, err := tree.db.Has(key)
+
+		if !found {
+			return nil, err
+		}
+
 		bytes, err := tree.db.Get(key)
 		if err != nil {
 			fmt.Printf("Key not found :%x\n", key)
@@ -568,7 +576,7 @@ func (tree *Tree) insertCase5(node *Node) {
 	tree.Save(parent)
 
 	if grandparent == nil {
-		fmt.Println("grantparent is nil")
+		panic("grantparent is nil")
 		return
 	}
 	// fmt.Println("grand parent 5", grandparent)
@@ -621,7 +629,10 @@ func (tree *Tree) Commit() error {
 		}
 		key := common.Hex2Bytes(cacheKey)
 		batch.Put(key, value)
-		fmt.Printf("Save %x, value :%x\n", key, value)
+
+		if tree.Debug {
+			fmt.Printf("Save %x, value :%x\n", key, value)
+		}
 	}
 	// commit then reset cache
 	tree.cache = make(map[string]*Item)

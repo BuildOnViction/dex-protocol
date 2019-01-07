@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-// Order : info that will be store in ipfs
+// OrderItem : info that will be store in database
 type OrderItem struct {
 	Timestamp uint64   `json:"timestamp"`
 	Quantity  *big.Int `json:"quantity"`
@@ -18,11 +18,19 @@ type OrderItem struct {
 	// NextOrder *Order     `json:"-"`
 	// PrevOrder *Order     `json:"-"`
 	// OrderList *OrderList `json:"-"`
-
+	// *OrderMeta
 	NextOrder []byte `json:"-"`
 	PrevOrder []byte `json:"-"`
 	OrderList []byte `json:"-"`
 }
+
+// OrderMeta to help building linked list, there would be a consecutive order meta for each linkedlist
+// and slot offset is slot of linkedlist
+// type OrderMeta struct {
+// 	NextOrder []byte `json:"-"`
+// 	PrevOrder []byte `json:"-"`
+// 	OrderList []byte `json:"-"`
+// }
 
 type Order struct {
 	Item *OrderItem
@@ -59,8 +67,8 @@ func NewOrder(quote map[string]string, orderList []byte) *Order {
 		Price:     price,
 		// OrderID:   orderID,
 		TradeID:   tradeID,
-		NextOrder: nil,
-		PrevOrder: nil,
+		NextOrder: emptyKey,
+		PrevOrder: emptyKey,
 		OrderList: orderList,
 	}
 
@@ -81,7 +89,7 @@ func (o *Order) UpdateQuantity(orderList *OrderList, newQuantity *big.Int, newTi
 	// update volume and modified timestamp
 	orderList.Item.Volume = Sub(orderList.Item.Volume, Sub(o.Item.Quantity, newQuantity))
 	o.Item.Timestamp = newTimestamp
-	o.Item.Quantity = newQuantity
+	o.Item.Quantity = CloneBigInt(newQuantity)
 
 	orderList.Save()
 }

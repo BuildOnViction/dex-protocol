@@ -13,6 +13,8 @@ import (
 	rbt "github.com/tomochain/orderbook/redblacktree"
 )
 
+var emptyKey = make([]byte, common.HashLength)
+
 func RLPEncodeToBytes(item *rbt.Item) ([]byte, error) {
 	return rlp.EncodeToBytes(item)
 }
@@ -104,12 +106,12 @@ func NewRedBlackTreeExtended(datadir string) *RedBlackTreeExtended {
 
 	// setup using bytes offset
 	obdb, _ := ethdb.NewLDBDatabase(datadir, 128, 1024)
-	emptyKey := make([]byte, common.HashLength)
+
 	// tree := &RedBlackTreeExtended{NewWithBytesComparator(RLPEncodeToBytes, RLPDecodeBytes, obdb)}
 	tree := &RedBlackTreeExtended{rbt.NewWith(CmpBigInt, OffsetEncodeBytes, OffsetDecodeBytes, emptyKey, obdb)}
 
 	tree.FormatBytes = func(key []byte) string {
-		if len(key) == 0 || key == nil {
+		if tree.IsEmptyKey(key) {
 			return "<nil>"
 		}
 		return new(big.Int).SetBytes(key).String()

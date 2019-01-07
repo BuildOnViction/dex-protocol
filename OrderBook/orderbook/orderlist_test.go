@@ -1,7 +1,6 @@
 package orderbook
 
 import (
-	"bytes"
 	"strconv"
 	"testing"
 )
@@ -66,16 +65,17 @@ func TestOrderList(t *testing.T) {
 		t.Errorf("Orderlist Length incorrect, got: %d, want: %d.", orderList.Item.Volume, orderListQuantity)
 	}
 
-	headOrder := orderList.GetOrder(orderList.Item.HeadOrder)
-	if !bytes.Equal(headOrder.Key, []byte("1")) {
-		t.Errorf("headorder id incorrect, got: %x, want: %d.", headOrder.Key, 1)
-	}
+	// headOrder := orderList.GetOrder(orderList.Item.HeadOrder)
 
-	nextOrder := orderList.GetOrder(headOrder.Item.NextOrder)
+	// if !IsEqual(new(big.Int).SetBytes(headOrder.Key), big.NewInt(1)) {
+	// 	t.Errorf("headorder id incorrect, got: %x, want: %d.", headOrder.Key, big.NewInt(1))
+	// }
 
-	if !bytes.Equal(nextOrder.Key, []byte("2")) {
-		t.Errorf("Next headorder id incorrect, got: %x, want: %d.", nextOrder.Key, 2)
-	}
+	// nextOrder := orderList.GetOrder(headOrder.Item.NextOrder)
+
+	// if !IsEqual(new(big.Int).SetBytes(nextOrder.Key), big.NewInt(2)) {
+	// 	t.Errorf("Next headorder id incorrect, got: %x, want: %d.", nextOrder.Key, big.NewInt(2))
+	// }
 
 	t.Logf("Order List : %s", orderList.String(0))
 }

@@ -15,7 +15,9 @@ const (
 	// ASK : ask constant
 	ASK = "ask"
 	// BID : bid constant
-	BID = "bid"
+	BID              = "bid"
+	ORDERTYPE_MARKET = "market"
+	ORDERTYPE_LIMIT  = "limit"
 )
 
 type OrderBookItem struct {
@@ -165,8 +167,8 @@ func (orderbook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 	quantityToTrade := ToBigInt(quote["quantity"])
 	side := quote["side"]
 	price := ToBigInt(quote["price"])
-	var newTrades []map[string]string
 
+	var newTrades []map[string]string
 	var orderInBook map[string]string
 
 	if side == BID {
@@ -185,7 +187,7 @@ func (orderbook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 			orderInBook = quote
 		}
 
-	} else if side == "ask" {
+	} else if side == ASK {
 		maxPrice := orderbook.Bids.MaxPrice()
 		for quantityToTrade.Cmp(Zero()) > 0 && orderbook.Bids.NotEmpty() && price.Cmp(maxPrice) <= 0 {
 			bestPriceBids := orderbook.Bids.MaxPriceList()
@@ -212,56 +214,76 @@ func (orderbook *OrderBook) ProcessOrder(quote map[string]string, verbose bool) 
 
 	orderbook.UpdateTime()
 	// quote["timestamp"] = strconv.Itoa(orderbook.Time)
+	// if we do not use auto-increment orderid, we must set price slot to avoid conflict
 	orderbook.Item.NextOrderID++
 
-	if orderType == "market" {
+	if orderType == ORDERTYPE_MARKET {
 		trades = orderbook.processMarketOrder(quote, verbose)
 	} else {
 		trades, orderInBook = orderbook.processLimitOrder(quote, verbose)
 	}
+
+	// update orderbook
+	orderbook.Save()
+
 	return trades, orderInBook
 }
 
 // processOrderList : process the order list
 func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, quantityStillToTrade *big.Int, quote map[string]string, verbose bool) (*big.Int, []map[string]string) {
-	quantityToTrade := quantityStillToTrade
+	quantityToTrade := CloneBigInt(quantityStillToTrade)
 	var trades []map[string]string
-
+	// var watchDog = 0
 	for orderList.Item.Length > 0 && quantityToTrade.Cmp(Zero()) > 0 {
 		headOrder := orderList.GetOrder(orderList.Item.HeadOrder)
-		tradedPrice := headOrder.Item.Price
+
+		if headOrder == nil {
+			fmt.Printf("\n\nFAIL : %x, %s\n\n", orderList.Item.HeadOrder, orderList.String(0))
+			return Zero(), trades
+		}
+		tradedPrice := CloneBigInt(headOrder.Item.Price)
 
 		var newBookQuantity *big.Int
 		var tradedQuantity *big.Int
 
 		if quantityToTrade.Cmp(headOrder.Item.Quantity) < 0 {
-			tradedQuantity = quantityToTrade
+			tradedQuantity = CloneBigInt(quantityToTrade)
 			// Do the transaction
 			newBookQuantity = Sub(headOrder.Item.Quantity, quantityToTrade)
 			headOrder.UpdateQuantity(orderList, newBookQuantity, headOrder.Item.Timestamp)
-			quantityToTrade = big.NewInt(0)
+			quantityToTrade = Zero()
 
 		} else if quantityToTrade.Cmp(headOrder.Item.Quantity) == 0 {
-			tradedQuantity = quantityToTrade
+			tradedQuantity = CloneBigInt(quantityToTrade)
 			if side == BID {
-				orderbook.Bids.RemoveOrderByID(headOrder.Key)
+				// orderbook.Bids.RemoveOrderByID(headOrder.Key)
+				orderbook.Bids.RemoveOrder(headOrder)
 			} else {
-				orderbook.Asks.RemoveOrderByID(headOrder.Key)
+				// orderbook.Asks.RemoveOrderByID(headOrder.Key)
+				orderbook.Asks.RemoveOrder(headOrder)
 			}
-			quantityToTrade = big.NewInt(0)
+			quantityToTrade = Zero()
 
 		} else {
-			tradedQuantity = headOrder.Item.Quantity
+			tradedQuantity = CloneBigInt(headOrder.Item.Quantity)
 			if side == BID {
-				orderbook.Bids.RemoveOrderByID(headOrder.Key)
+				// orderbook.Bids.RemoveOrderByID(headOrder.Key)
+				orderbook.Bids.RemoveOrder(headOrder)
 			} else {
-				orderbook.Asks.RemoveOrderByID(headOrder.Key)
+				// orderbook.Asks.RemoveOrderByID(headOrder.Key)
+				orderbook.Asks.RemoveOrder(headOrder)
 			}
 		}
 
 		if verbose {
 			fmt.Printf("TRADE: Time - %d, Price - %s, Quantity - %s, TradeID - %s, Matching TradeID - %s\n",
 				orderbook.Item.Time, tradedPrice, tradedQuantity, headOrder.Item.TradeID, quote["trade_id"])
+			// fmt.Println(headOrder)
+			// watchDog++
+			// if watchDog > 10 {
+			// panic("stop")
+			// }
+
 		}
 
 		transactionRecord := make(map[string]string)
@@ -275,34 +297,50 @@ func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, 
 }
 
 // CancelOrder : cancel the order
-func (orderbook *OrderBook) CancelOrder(side string, orderID int) {
+func (orderbook *OrderBook) CancelOrder(side string, orderID int, price *big.Int) {
 	orderbook.UpdateTime()
-	key := []byte(strconv.Itoa(orderID))
+	key := GetKeyFromBig(big.NewInt(int64(orderID)))
+
 	if side == BID {
-		if orderbook.Bids.OrderExist(key) {
-			orderbook.Bids.RemoveOrderByID(key)
+		order := orderbook.Bids.GetOrder(key, price)
+		if order != nil {
+			orderbook.Bids.RemoveOrder(order)
 		}
+		// if orderbook.Bids.OrderExist(key, price) {
+		// 	orderbook.Bids.RemoveOrder(order)
+		// }
 	} else {
-		if orderbook.Asks.OrderExist(key) {
-			orderbook.Asks.RemoveOrderByID(key)
+
+		order := orderbook.Asks.GetOrder(key, price)
+		if order != nil {
+			orderbook.Asks.RemoveOrder(order)
 		}
+
+		// if orderbook.Asks.OrderExist(key) {
+		// 	orderbook.Asks.RemoveOrder(order)
+		// }
 	}
 }
 
 // ModifyOrder : modify the order
-func (orderbook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID int) {
+func (orderbook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID int, price *big.Int) {
 	orderbook.UpdateTime()
 
 	side := quoteUpdate["side"]
 	quoteUpdate["order_id"] = strconv.Itoa(orderID)
 	quoteUpdate["timestamp"] = strconv.FormatUint(orderbook.Item.Time, 10)
-	key := []byte(quoteUpdate["order_id"])
+	key := GetKeyFromBig(ToBigInt(quoteUpdate["order_id"]))
 	if side == BID {
-		if orderbook.Bids.OrderExist(key) {
+
+		if orderbook.Bids.OrderExist(key, price) {
 			orderbook.Bids.UpdateOrder(quoteUpdate)
 		}
+		// if orderbook.Bids.OrderExist(key) {
+		// 	orderbook.Bids.UpdateOrder(quoteUpdate)
+		// }
 	} else {
-		if orderbook.Asks.OrderExist(key) {
+
+		if orderbook.Asks.OrderExist(key, price) {
 			orderbook.Asks.UpdateOrder(quoteUpdate)
 		}
 	}
@@ -310,7 +348,7 @@ func (orderbook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID i
 
 // VolumeAtPrice : get volume at the current price
 func (orderbook *OrderBook) VolumeAtPrice(side string, price *big.Int) *big.Int {
-	volume := big.NewInt(0)
+	volume := Zero()
 	if side == BID {
 		if orderbook.Bids.PriceExist(price) {
 			orderList := orderbook.Bids.PriceList(price)

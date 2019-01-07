@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -18,8 +19,6 @@ const (
 	// LimitDepthPrint : the maximum depth of order list to be printed
 	LimitDepthPrint = 20
 )
-
-var emptyKey = []byte{}
 
 type OrderListItem struct {
 	// HeadOrder *Order          `json:"headOrder"`
@@ -35,12 +34,14 @@ type OrderListItem struct {
 type OrderList struct {
 	// db      *ethdb.LDBDatabase
 	orderTree *OrderTree
+	slotKey   *big.Int
 	// orderDB   *ethdb.LDBDatabase
 	Item *OrderListItem
 	Key  []byte
 }
 
 // NewOrderList : return new OrderList
+// each orderlist will store information of order in a seperated domain
 func NewOrderList(price *big.Int, orderTree *OrderTree) *OrderList {
 	item := &OrderListItem{
 		// HeadOrder: nil,
@@ -49,17 +50,27 @@ func NewOrderList(price *big.Int, orderTree *OrderTree) *OrderList {
 		HeadOrder: orderTree.PriceTree.EmptyKey,
 		TailOrder: orderTree.PriceTree.EmptyKey,
 		Length:    0,
-		Volume:    big.NewInt(0),
-		Price:     price,
+		Volume:    Zero(),
+		Price:     CloneBigInt(price),
 	}
 
-	key := orderTree.getKeyFromPrice(price)
+	return NewOrderListWithItem(item, orderTree)
 
-	return &OrderList{
+}
+
+func NewOrderListWithItem(item *OrderListItem, orderTree *OrderTree) *OrderList {
+	key := orderTree.getKeyFromPrice(item.Price)
+
+	orderList := &OrderList{
 		Item:      item,
 		Key:       key,
 		orderTree: orderTree,
 	}
+
+	// orderList.slotKey = Zero()
+	orderList.slotKey = new(big.Int).SetBytes(crypto.Keccak256(key))
+
+	return orderList
 }
 
 func (orderList *OrderList) HeadOrderKey(keys ...[]byte) []byte {
@@ -74,7 +85,29 @@ func (orderList *OrderList) GetOrder(key []byte) *Order {
 	if orderList.isEmptyKey(key) {
 		return nil
 	}
-	return orderList.orderTree.GetOrder(key)
+	// orderID := key
+	storedKey := orderList.GetOrderIDFromKey(key)
+
+	bytes, err := orderList.orderTree.OrderDB.Get(storedKey)
+	if err != nil {
+		fmt.Printf("Key not found :%x, %v\n", storedKey, err)
+		return nil
+	}
+	orderItem := &OrderItem{}
+	rlp.DecodeBytes(bytes, orderItem)
+	order := &Order{
+		Item: orderItem,
+		Key:  key,
+	}
+	return order
+
+	// order := orderList.orderTree.GetOrder(orderID)
+	// if order != nil {
+	// 	// return the original key
+	// 	order.Key = key
+	// }
+
+	// return order
 }
 
 func (orderList *OrderList) isEmptyKey(key []byte) bool {
@@ -145,11 +178,45 @@ func (orderList *OrderList) Save() error {
 	}
 	// we use orderlist db file seperated from order
 	// orderList.db.Put(orderList.Key, value)
-	fmt.Printf("Save orderlist key %x, value :%x\n", orderList.Key, value)
+	if orderList.orderTree.PriceTree.Debug {
+		fmt.Printf("Save orderlist key %x, value :%x\n", orderList.Key, value)
+	}
 
 	return orderList.orderTree.PriceTree.Put(orderList.Key, value)
 
 }
+
+// GetOrderIDFromKey
+// If we allow the same orderid belongs to many pricelist, we must use slotKey
+// otherwise just use 1 db for storing all orders of all pricelists
+// currently we use auto increase ment id so no need slot
+func (orderList *OrderList) GetOrderIDFromKey(key []byte) []byte {
+	// orderSlot := new(big.Int).SetBytes(key)
+	// fmt.Println("FAIL", key, orderList.slotKey)
+	// return common.BigToHash(Add(orderList.slotKey, orderSlot)).Bytes()
+
+	return key
+}
+
+// GetOrderID return the real slot key of order in this linked list
+func (orderList *OrderList) GetOrderID(order *Order) []byte {
+	return orderList.GetOrderIDFromKey(order.Key)
+}
+
+// OrderExist search order in orderlist
+func (orderList *OrderList) OrderExist(key []byte) bool {
+	// orderKey := key
+	orderKey := orderList.GetOrderIDFromKey(key)
+	found, _ := orderList.orderTree.OrderDB.Has(orderKey)
+	return found
+}
+
+// // OrderExist search order in orderlist
+// func (orderList *OrderList) OrderExist(order *Order) bool {
+// 	key := orderList.GetOrderID(order)
+// 	found, _ := orderList.orderTree.OrderDB.Has(key)
+// 	return found
+// }
 
 func (orderList *OrderList) SaveOrder(order *Order) error {
 	value, err := rlp.EncodeToBytes(order.Item)
@@ -160,8 +227,11 @@ func (orderList *OrderList) SaveOrder(order *Order) error {
 
 	// using other db to store Order object
 	// key := common.BytesToHash(order.Key).Bytes()
-	key := order.Key
-	fmt.Printf("Save order key : %x, value :%x\n", key, value)
+	// key := order.Key
+	key := orderList.GetOrderID(order)
+	if orderList.orderTree.PriceTree.Debug {
+		fmt.Printf("Save order key : %x, value :%x\n", key, value)
+	}
 
 	return orderList.orderTree.OrderDB.Put(key, value)
 
@@ -170,6 +240,14 @@ func (orderList *OrderList) SaveOrder(order *Order) error {
 // AppendOrder : append order into the order list
 func (orderList *OrderList) AppendOrder(order *Order) error {
 
+	if orderList.Item.Length == 0 {
+		order.Item.NextOrder = emptyKey
+		order.Item.PrevOrder = emptyKey
+	} else {
+		order.Item.PrevOrder = orderList.Item.TailOrder
+		order.Item.NextOrder = emptyKey
+	}
+
 	// save into database first
 	err := orderList.SaveOrder(order)
 	if err != nil {
@@ -177,17 +255,9 @@ func (orderList *OrderList) AppendOrder(order *Order) error {
 	}
 
 	if orderList.Item.Length == 0 {
-		// order.NextOrder = nil
-		// order.PrevOrder = nil
-		order.Item.NextOrder = emptyKey
-		order.Item.PrevOrder = emptyKey
-
 		orderList.Item.HeadOrder = order.Key
 		orderList.Item.TailOrder = order.Key
-
 	} else {
-		order.Item.PrevOrder = orderList.Item.TailOrder
-		order.Item.NextOrder = emptyKey
 		tailOrder := orderList.GetOrder(orderList.Item.TailOrder)
 		if tailOrder != nil {
 			tailOrder.Item.NextOrder = order.Key
@@ -201,13 +271,13 @@ func (orderList *OrderList) AppendOrder(order *Order) error {
 	return orderList.Save()
 }
 
+func (orderList *OrderList) DeleteOrder(order *Order) error {
+	key := orderList.GetOrderID(order)
+	return orderList.orderTree.OrderDB.Delete(key)
+}
+
 // RemoveOrder : remove order from the order list
 func (orderList *OrderList) RemoveOrder(order *Order) error {
-
-	err := orderList.orderTree.OrderDB.Delete(order.Key)
-	if err != nil {
-		return err
-	}
 
 	// fmt.Println("OrderItem", ToJSON(orderList.Item))
 	if orderList.Item.Length == 0 {
@@ -215,11 +285,23 @@ func (orderList *OrderList) RemoveOrder(order *Order) error {
 		return nil
 	}
 
-	orderList.Item.Volume = Sub(orderList.Item.Volume, order.Item.Quantity)
-	orderList.Item.Length--
+	err := orderList.DeleteOrder(order)
+
+	if err != nil {
+		// stop other operations
+		return err
+	}
 
 	nextOrder := orderList.GetOrder(order.Item.NextOrder)
 	prevOrder := orderList.GetOrder(order.Item.PrevOrder)
+
+	// if there is no Order
+	if nextOrder == nil && prevOrder == nil {
+		return nil
+	}
+
+	orderList.Item.Volume = Sub(orderList.Item.Volume, order.Item.Quantity)
+	orderList.Item.Length--
 
 	if nextOrder != nil && prevOrder != nil {
 		nextOrder.Item.PrevOrder = prevOrder.Key

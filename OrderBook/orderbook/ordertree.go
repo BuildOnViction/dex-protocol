@@ -15,9 +15,10 @@ import (
 )
 
 type OrderTreeItem struct {
-	Volume    *big.Int `json:"volume"`    // Contains total quantity from all Orders in tree
-	NumOrders uint64   `json:"numOrders"` // Contains count of Orders in tree
-	Depth     uint64   `json:"depth"`     // Number of different prices in tree (http://en.wikipedia.org/wiki/Order_book_(trading)#Book_depth)
+	Volume       *big.Int `json:"volume"`       // Contains total quantity from all Orders in tree
+	NumOrders    uint64   `json:"numOrders"`    // Contains count of Orders in tree
+	Depth        uint64   `json:"depth"`        // Number of different prices in tree (http://en.wikipedia.org/wiki/Order_book_(trading)#Book_depth)
+	PriceTreeKey []byte   `json:"priceTreeKey"` // Root Key of price tree
 }
 
 // OrderTree : order tree structure for travelling
@@ -37,21 +38,26 @@ func NewOrderTree(datadir string) *OrderTree {
 	orderListDBPath := path.Join(datadir, "pricetree")
 	orderDBPath := path.Join(datadir, "order")
 	priceTree := NewRedBlackTreeExtended(orderListDBPath)
+
 	orderDB, _ := ethdb.NewLDBDatabase(orderDBPath, 0, 0)
 
 	item := &OrderTreeItem{
-		Volume:    big.NewInt(0),
+		Volume:    Zero(),
 		NumOrders: 0,
 		Depth:     0,
 	}
 	orderTree := &OrderTree{
-		PriceTree: priceTree,
-		OrderDB:   orderDB,
-		Item:      item,
+		OrderDB: orderDB,
+		Item:    item,
 	}
 
 	// must restore from db first to make sure we get corrent information
 	orderTree.Restore()
+	// then update PriceTree after restore the order tree
+	priceTree.SetRootKey(orderTree.Item.PriceTreeKey)
+
+	// update price tree
+	orderTree.PriceTree = priceTree
 
 	return orderTree
 }
@@ -64,6 +70,10 @@ func (orderTree *OrderTree) Save() error {
 	orderTree.PriceTree.Commit()
 
 	// update tree meta information
+	priceTreeRoot := orderTree.PriceTree.Root()
+	if priceTreeRoot != nil {
+		orderTree.Item.PriceTreeKey = priceTreeRoot.Key
+	}
 	ordertreeBytes, err := rlp.EncodeToBytes(orderTree.Item)
 	// fmt.Printf("ordertree bytes : %s, %x\n", ToJSON(orderTree.Item), ordertreeBytes)
 	if err != nil {
@@ -97,19 +107,25 @@ func (orderTree *OrderTree) NotEmpty() bool {
 	return iter.First()
 }
 
-func (orderTree *OrderTree) GetOrder(key []byte) *Order {
-	bytes, err := orderTree.OrderDB.Get(key)
-	if err != nil {
-		fmt.Printf("Key not found :%x, %s\n", key, key)
+func (orderTree *OrderTree) GetOrder(key []byte, price *big.Int) *Order {
+	orderList := orderTree.PriceList(price)
+	if orderList == nil {
 		return nil
 	}
-	orderItem := &OrderItem{}
-	rlp.DecodeBytes(bytes, orderItem)
-	order := &Order{
-		Item: orderItem,
-		Key:  key,
-	}
-	return order
+
+	return orderList.GetOrder(key)
+	// bytes, err := orderTree.OrderDB.Get(key)
+	// if err != nil {
+	// 	fmt.Printf("Key not found :%x, %v\n", key, err)
+	// 	return nil
+	// }
+	// orderItem := &OrderItem{}
+	// rlp.DecodeBytes(bytes, orderItem)
+	// order := &Order{
+	// 	Item: orderItem,
+	// 	Key:  key,
+	// }
+	// return order
 }
 
 // // Order : get the order by orderID
@@ -125,17 +141,14 @@ func (orderTree *OrderTree) getKeyFromPrice(price *big.Int) []byte {
 
 // PriceList : get the price list from the price map using price as key
 func (orderTree *OrderTree) PriceList(price *big.Int) *OrderList {
-	orderListKey := orderTree.getKeyFromPrice(price)
-	bytes, found := orderTree.PriceTree.Get(orderListKey)
+
+	orderList := NewOrderList(price, orderTree)
+	bytes, found := orderTree.PriceTree.Get(orderList.Key)
 
 	if found {
-		item := &OrderListItem{}
-		rlp.DecodeBytes(bytes, item)
-		return &OrderList{
-			Item:      item,
-			Key:       orderListKey,
-			orderTree: orderTree,
-		}
+		// update Item
+		rlp.DecodeBytes(bytes, orderList.Item)
+		return orderList
 	}
 
 	return nil
@@ -174,23 +187,27 @@ func (orderTree *OrderTree) PriceExist(price *big.Int) bool {
 	return found
 }
 
-// OrderExist : check order existed
-func (orderTree *OrderTree) OrderExist(key []byte) bool {
-	found, _ := orderTree.OrderDB.Has(key)
-	return found
+// OrderExist : check order existed, only support for a specific price
+func (orderTree *OrderTree) OrderExist(key []byte, price *big.Int) bool {
+	orderList := orderTree.PriceList(price)
+	if orderList == nil {
+		return false
+	}
+
+	return orderList.OrderExist(key)
 }
 
 // InsertOrder : insert new order using quote data as map
-func (orderTree *OrderTree) InsertOrder(quote map[string]string) {
+func (orderTree *OrderTree) InsertOrder(quote map[string]string) error {
 
-	orderID := ToBigInt(quote["order_id"])
-	key := GetKeyFromBig(orderID)
+	// orderID := ToBigInt(quote["order_id"])
+	// key := GetKeyFromBig(orderID)
 
-	if orderTree.OrderExist(key) {
-		// orderTree.RemoveOrderByID(key)
-		fmt.Println("Order already exsited, do nothing or should remove it?")
-		return
-	}
+	// if orderTree.OrderExist(key) {
+	// 	// orderTree.RemoveOrderByID(key)
+	// 	fmt.Println("Order already exsited, do nothing or should remove it?")
+	// 	return
+	// }
 
 	price := ToBigInt(quote["price"])
 
@@ -206,7 +223,16 @@ func (orderTree *OrderTree) InsertOrder(quote map[string]string) {
 
 	// order will be insert if there is a follow orderList key
 	if orderList != nil {
+
 		order := NewOrder(quote, orderList.Key)
+
+		if orderList.OrderExist(order.Key) {
+			// orderTree.RemoveOrderByID(key)
+			orderTree.RemoveOrder(order)
+			// fmt.Println("Order already exsited, do nothing or should remove it?")
+			// return nil
+		}
+
 		orderList.AppendOrder(order)
 		// orderTree.OrderMap[order.OrderID] = order
 		orderList.Save()
@@ -218,25 +244,30 @@ func (orderTree *OrderTree) InsertOrder(quote map[string]string) {
 		// fmt.Println("Num order", orderTree.Item.NumOrders)
 		// update
 		// should use batch to optimize the performance
-		orderTree.Save()
+		return orderTree.Save()
 	}
 
+	return nil
 }
 
 // UpdateOrder : update an order
 func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 	// order := orderTree.OrderMap[quote["order_id"]]
-	orderID := ToBigInt(quote["order_id"])
-	key := GetKeyFromBig(orderID)
 
-	order := orderTree.GetOrder(key)
-	originalQuantity := order.Item.Quantity
 	price := ToBigInt(quote["price"])
-	orderList := orderTree.PriceList(order.Item.Price)
+	orderList := orderTree.PriceList(price)
 
 	if orderList == nil {
 		return
 	}
+
+	orderID := ToBigInt(quote["order_id"])
+	key := GetKeyFromBig(orderID)
+	// order := orderTree.GetOrder(key)
+
+	order := orderList.GetOrder(key)
+
+	originalQuantity := CloneBigInt(order.Item.Quantity)
 
 	if price.Cmp(order.Item.Price) != 0 {
 		// Price changed. Remove order and update tree.
@@ -246,7 +277,7 @@ func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 			orderTree.RemovePrice(price)
 		}
 		orderTree.InsertOrder(quote)
-		orderList.Save()
+		// orderList.Save()
 	} else {
 		quantity := ToBigInt(quote["quantity"])
 		timestamp, _ := strconv.ParseUint(quote["timestamp"], 10, 64)
@@ -262,15 +293,14 @@ func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 func (orderTree *OrderTree) RemoveOrder(order *Order) error {
 	// fmt.Printf("Node :%#v \n", order.Item)
 
-	// then remove order from orderDB
+	// then remove order from orderDB, 1 order can belong to muliple order price?
+	// but we must not store order.meta in the same db, there must be one for order.meta, other for order.item
 	// err := orderTree.OrderDB.Delete(order.Key)
 
 	// if err != nil {
 	// 	// stop other operations
 	// 	return err
 	// }
-
-	// fmt.Println(orderTree.String(0))
 
 	// get orderList by price, if there is orderlist, we will update it
 	orderList := orderTree.PriceList(order.Item.Price)
@@ -294,6 +324,8 @@ func (orderTree *OrderTree) RemoveOrder(order *Order) error {
 		// delete(orderTree.OrderMap, orderID)
 		orderTree.Item.NumOrders--
 
+		// fmt.Println(orderTree.String(0))
+
 		// should use batch to optimize the performance
 		return orderTree.Save()
 
@@ -304,17 +336,17 @@ func (orderTree *OrderTree) RemoveOrder(order *Order) error {
 }
 
 // RemoveOrderByID : remove info using orderID
-func (orderTree *OrderTree) RemoveOrderByID(key []byte) error {
+// func (orderTree *OrderTree) RemoveOrderByID(key []byte) error {
 
-	// order := orderTree.OrderMap[orderID]
-	order := orderTree.GetOrder(key)
-	if order == nil {
-		return nil
-	}
+// 	// order := orderTree.OrderMap[orderID]
+// 	order := orderTree.GetOrder(key)
+// 	if order == nil {
+// 		return nil
+// 	}
 
-	return orderTree.RemoveOrder(order)
+// 	return orderTree.RemoveOrder(order)
 
-}
+// }
 
 func (orderTree *OrderTree) getOrderListItem(bytes []byte) *OrderListItem {
 	item := &OrderListItem{}
@@ -324,11 +356,12 @@ func (orderTree *OrderTree) getOrderListItem(bytes []byte) *OrderListItem {
 
 func (orderTree *OrderTree) decodeOrderList(bytes []byte) *OrderList {
 	item := orderTree.getOrderListItem(bytes)
-	return &OrderList{
-		Item:      item,
-		Key:       orderTree.getKeyFromPrice(item.Price),
-		orderTree: orderTree,
-	}
+	return NewOrderListWithItem(item, orderTree)
+	// return &OrderList{
+	// 	Item:      item,
+	// 	Key:       orderTree.getKeyFromPrice(item.Price),
+	// 	orderTree: orderTree,
+	// }
 }
 
 // MaxPrice : get the max price
@@ -341,7 +374,7 @@ func (orderTree *OrderTree) MaxPrice() *big.Int {
 			}
 		}
 	}
-	return big.NewInt(0)
+	return Zero()
 }
 
 // MinPrice : get the min price
@@ -354,7 +387,7 @@ func (orderTree *OrderTree) MinPrice() *big.Int {
 			}
 		}
 	}
-	return big.NewInt(0)
+	return Zero()
 }
 
 // MaxPriceList : get max price list
