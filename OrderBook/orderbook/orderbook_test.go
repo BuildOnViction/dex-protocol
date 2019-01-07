@@ -112,6 +112,8 @@ func TestOrderBook(t *testing.T) {
 	for _, order := range limitOrders {
 		trades, orderInBook = orderBook.ProcessOrder(order, true)
 	}
+	// t.Logf("\nOrderBook :%s", orderBook.String(0))
+	// return
 
 	value := ToBigInt("101")
 	if orderBook.BestAsk().Cmp(value) != 0 {
@@ -156,6 +158,10 @@ func TestOrderBook(t *testing.T) {
 		t.Errorf("orderBook.ProcessOrder incorrect")
 	}
 
+	// t.Logf("\nOrderBook :%s", orderBook.String(0))
+	// t.Logf("\nTrade :%s\nOrderInBook :%s", ToJSON(trades), ToJSON(orderInBook))
+	// return
+
 	// If a limit crosses but is only partially matched, the remaning volume will
 	// be placed in the book as an outstanding order
 	bigOrder := make(map[string]string)
@@ -171,6 +177,10 @@ func TestOrderBook(t *testing.T) {
 		t.Errorf("orderBook.ProcessOrder incorrect")
 	}
 
+	// t.Logf("\nOrderBook :%s", orderBook.String(0))
+	// t.Logf("\nTrade :%s\nOrderInBook :%s", ToJSON(trades), ToJSON(orderInBook))
+	// return
+
 	// // Market orders only require that a user specifies a side (bid or ask), a quantity, and their unique trade id
 	// marketOrder = make(map[string]string)
 	// marketOrder["type"] = "market"
@@ -183,7 +193,8 @@ func TestOrderBook(t *testing.T) {
 	// orderList := orderBook.Asks.MaxPriceList()
 	// t.Logf("Best ask List : %s", orderList.String(0))
 	// t.Log(orderBook.Asks.PriceTree)
-	t.Logf("\nTrade :%s\nOrderInBook :%s", ToJSON(trades), ToJSON(orderInBook))
+
 	t.Logf("\nOrderBook :%s", orderBook.String(0))
 
+	t.Logf("\nTrade :%s\nOrderInBook :%s", ToJSON(trades), ToJSON(orderInBook))
 }

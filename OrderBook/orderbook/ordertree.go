@@ -300,7 +300,8 @@ func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 	orderList := orderTree.PriceList(price)
 
 	if orderList == nil {
-		return
+		// create a price list for this price
+		orderList = orderTree.CreatePrice(price)
 	}
 
 	orderID := ToBigInt(quote["order_id"])
@@ -311,7 +312,7 @@ func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 
 	originalQuantity := CloneBigInt(order.Item.Quantity)
 
-	if price.Cmp(order.Item.Price) != 0 {
+	if !IsEqual(price, order.Item.Price) {
 		// Price changed. Remove order and update tree.
 		// orderList := orderTree.PriceMap[order.Price.String()]
 		orderList.RemoveOrder(order)
@@ -324,8 +325,10 @@ func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 		quantity := ToBigInt(quote["quantity"])
 		timestamp, _ := strconv.ParseUint(quote["timestamp"], 10, 64)
 		order.UpdateQuantity(orderList, quantity, timestamp)
-		orderList.SaveOrder(order)
 	}
+
+	// fmt.Println("QUANTITY", order.Item.Quantity.String())
+
 	orderTree.Item.Volume = Add(orderTree.Item.Volume, Sub(order.Item.Quantity, originalQuantity))
 
 	// should use batch to optimize the performance
@@ -345,6 +348,8 @@ func (orderTree *OrderTree) RemoveOrderFromOrderList(order *Order, orderList *Or
 		orderTree.RemovePrice(order.Item.Price)
 		fmt.Println("REMOVE price list", order.Item.Price.String())
 	}
+
+	// fmt.Println("QUANTITY", order.Item.Quantity.String())
 
 	// update orderTree
 	orderTree.Item.Volume = Sub(orderTree.Item.Volume, order.Item.Quantity)

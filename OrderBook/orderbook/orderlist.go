@@ -123,6 +123,8 @@ func (orderList *OrderList) String(startDepth int) string {
 
 	var buffer bytes.Buffer
 	tabs := strings.Repeat("\t", startDepth)
+	// buffer.WriteString(fmt.Sprintf("{\n\t%sHeadKey: %x\n\t%sTailKey: %x\n\t%sLength: %d\n\t%sVolume: %v\n\t%sPrice: %v",
+	// tabs, orderList.Item.HeadOrder, tabs, orderList.Item.TailOrder,
 	buffer.WriteString(fmt.Sprintf("{\n\t%sLength: %d\n\t%sVolume: %v\n\t%sPrice: %v",
 		tabs, orderList.Item.Length, tabs, orderList.Item.Volume, tabs, orderList.Item.Price))
 
@@ -273,7 +275,7 @@ func (orderList *OrderList) AppendOrder(order *Order) error {
 	}
 	orderList.Item.Length++
 	orderList.Item.Volume = Add(orderList.Item.Volume, order.Item.Quantity)
-	fmt.Println("orderlist", orderList.String(0))
+	// fmt.Println("orderlist", orderList.String(0))
 	return orderList.Save()
 }
 

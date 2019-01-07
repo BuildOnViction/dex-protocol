@@ -37,18 +37,20 @@ type Order struct {
 	Key  []byte `json:"orderID"`
 }
 
-func (o *Order) String() string {
-	return fmt.Sprintf("key : %x, item: %s", o.Key, ToJSON(o.Item))
+func (order *Order) String() string {
+
+	return fmt.Sprintf("orderID : %x, price: %s, quantity :%s, tradeID: %s",
+		new(big.Int).SetBytes(order.Key), order.Item.Price, order.Item.Quantity, order.Item.TradeID)
 }
 
-func (o *Order) GetNextOrder(orderList *OrderList) *Order {
-	nextOrder := orderList.GetOrder(o.Item.NextOrder)
+func (order *Order) GetNextOrder(orderList *OrderList) *Order {
+	nextOrder := orderList.GetOrder(order.Item.NextOrder)
 
 	return nextOrder
 }
 
-func (o *Order) GetPrevOrder(orderList *OrderList) *Order {
-	prevOrder := orderList.GetOrder(o.Item.PrevOrder)
+func (order *Order) GetPrevOrder(orderList *OrderList) *Order {
+	prevOrder := orderList.GetOrder(order.Item.PrevOrder)
 
 	return prevOrder
 }
@@ -82,14 +84,15 @@ func NewOrder(quote map[string]string, orderList []byte) *Order {
 }
 
 // UpdateQuantity : update quantity of the order
-func (o *Order) UpdateQuantity(orderList *OrderList, newQuantity *big.Int, newTimestamp uint64) {
-	if newQuantity.Cmp(o.Item.Quantity) > 0 && !bytes.Equal(orderList.Item.TailOrder, o.Key) {
-		orderList.MoveToTail(o)
+func (order *Order) UpdateQuantity(orderList *OrderList, newQuantity *big.Int, newTimestamp uint64) {
+	if newQuantity.Cmp(order.Item.Quantity) > 0 && !bytes.Equal(orderList.Item.TailOrder, order.Key) {
+		orderList.MoveToTail(order)
 	}
 	// update volume and modified timestamp
-	orderList.Item.Volume = Sub(orderList.Item.Volume, Sub(o.Item.Quantity, newQuantity))
-	o.Item.Timestamp = newTimestamp
-	o.Item.Quantity = CloneBigInt(newQuantity)
-
+	orderList.Item.Volume = Sub(orderList.Item.Volume, Sub(order.Item.Quantity, newQuantity))
+	order.Item.Timestamp = newTimestamp
+	order.Item.Quantity = CloneBigInt(newQuantity)
+	// fmt.Println("QUANTITY", order.Item.Quantity.String())
+	orderList.SaveOrder(order)
 	orderList.Save()
 }
