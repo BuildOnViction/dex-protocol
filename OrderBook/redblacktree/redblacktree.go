@@ -97,9 +97,10 @@ func (tree *Tree) Put(key []byte, value []byte) error {
 			// fmt.Printf("Comparing :%v\n", compare)
 			switch {
 			case compare == 0:
-				node.Key = key
-				item := &Item{Value: value, Keys: &KeyMeta{}}
-				node.Item = item
+				// fmt.Printf("UPDATE CONTENT ONLY :%v\n", compare)
+				// node.Key = key
+				// item := &Item{Value: value, Keys: &KeyMeta{}}
+				node.Item.Value = value
 				tree.Save(node)
 				return nil
 			case compare < 0:
@@ -533,7 +534,6 @@ func (tree *Tree) insertCase3(node *Node) {
 	parent := node.Parent(tree)
 	uncle := node.uncle(tree)
 	// grandparent := node.grandparent(tree)
-	grandparent := parent.Parent(tree)
 
 	// fmt.Println("grand parent 3", grandparent)
 	// fmt.Printf("Insert case 3, uncle: %s\n", uncle)
@@ -541,7 +541,10 @@ func (tree *Tree) insertCase3(node *Node) {
 		parent.Item.Color = black
 		uncle.Item.Color = black
 		tree.Save(uncle)
-		// tree.Save(parent)
+		tree.Save(parent)
+		grandparent := parent.Parent(tree)
+		tree.assertNotNull(grandparent, "grant parent")
+
 		grandparent.Item.Color = red
 		tree.insertCase1(grandparent)
 		tree.Save(grandparent)
@@ -554,6 +557,7 @@ func (tree *Tree) insertCase4(node *Node) {
 	parent := node.Parent(tree)
 	// grandparent := node.grandparent(tree)
 	grandparent := parent.Parent(tree)
+	tree.assertNotNull(grandparent, "grant parent")
 	// fmt.Println("grand parent 4", grandparent)
 	if tree.Comparator(node.Key, parent.RightKey()) == 0 &&
 		tree.Comparator(parent.Key, grandparent.LeftKey()) == 0 {
@@ -568,17 +572,20 @@ func (tree *Tree) insertCase4(node *Node) {
 	tree.insertCase5(node)
 }
 
+func (tree *Tree) assertNotNull(node *Node, name string) {
+	if node == nil {
+		panic(fmt.Sprintf("%s is nil\n", name))
+	}
+}
+
 func (tree *Tree) insertCase5(node *Node) {
 	parent := node.Parent(tree)
 	// grandparent := node.grandparent(tree)
-	grandparent := parent.Parent(tree)
 	parent.Item.Color = black
 	tree.Save(parent)
 
-	if grandparent == nil {
-		panic("grantparent is nil")
-		return
-	}
+	grandparent := parent.Parent(tree)
+	tree.assertNotNull(grandparent, "grant parent")
 	// fmt.Println("grand parent 5", grandparent)
 	grandparent.Item.Color = red
 	tree.Save(grandparent)
