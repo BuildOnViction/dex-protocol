@@ -73,13 +73,13 @@ func NewOrderListWithItem(item *OrderListItem, orderTree *OrderTree) *OrderList 
 	return orderList
 }
 
-func (orderList *OrderList) HeadOrderKey(keys ...[]byte) []byte {
-	if len(keys) == 1 {
-		orderList.Item.HeadOrder = keys[0]
-	}
+// func (orderList *OrderList) HeadOrderKey(keys ...[]byte) []byte {
+// 	if len(keys) == 1 {
+// 		orderList.Item.HeadOrder = keys[0]
+// 	}
 
-	return orderList.Item.HeadOrder
-}
+// 	return orderList.Item.HeadOrder
+// }
 
 func (orderList *OrderList) GetOrder(key []byte) *Order {
 	if orderList.isEmptyKey(key) {
@@ -142,6 +142,9 @@ func (orderList *OrderList) String(startDepth int) string {
 		buffer.WriteString(fmt.Sprintf("\n\t%s%s |-> %s", tabs, spaces, linkedList.String()))
 		linkedList = orderList.GetOrder(linkedList.Item.NextOrder)
 	}
+	if depth == 0 {
+		buffer.WriteString(" <nil>")
+	}
 	buffer.WriteString("\n\t")
 	buffer.WriteString(tabs)
 	buffer.WriteString("Tail:")
@@ -157,6 +160,9 @@ func (orderList *OrderList) String(startDepth int) string {
 		}
 		buffer.WriteString(fmt.Sprintf("\n\t%s%s <-| %s", tabs, spaces, linkedList.String()))
 		linkedList = orderList.GetOrder(linkedList.Item.PrevOrder)
+	}
+	if depth == 0 {
+		buffer.WriteString(" <nil>")
 	}
 	buffer.WriteString("\n")
 	buffer.WriteString(tabs)
@@ -181,7 +187,7 @@ func (orderList *OrderList) Save() error {
 	if orderList.orderTree.PriceTree.Debug {
 		fmt.Printf("Save orderlist key %x, value :%x\n", orderList.Key, value)
 	}
-
+	// fmt.Println("AFTER UPDATE", orderList.String(0))
 	return orderList.orderTree.PriceTree.Put(orderList.Key, value)
 
 }
@@ -267,7 +273,7 @@ func (orderList *OrderList) AppendOrder(order *Order) error {
 	}
 	orderList.Item.Length++
 	orderList.Item.Volume = Add(orderList.Item.Volume, order.Item.Quantity)
-
+	fmt.Println("orderlist", orderList.String(0))
 	return orderList.Save()
 }
 
@@ -295,10 +301,12 @@ func (orderList *OrderList) RemoveOrder(order *Order) error {
 	nextOrder := orderList.GetOrder(order.Item.NextOrder)
 	prevOrder := orderList.GetOrder(order.Item.PrevOrder)
 
-	// if there is no Order
-	if nextOrder == nil && prevOrder == nil {
-		return nil
-	}
+	// // if there is no Order
+	// if nextOrder == nil && prevOrder == nil {
+	// 	return nil
+	// }
+
+	// fmt.Println("DELETE", nextOrder, prevOrder, order)
 
 	orderList.Item.Volume = Sub(orderList.Item.Volume, order.Item.Quantity)
 	orderList.Item.Length--
@@ -310,6 +318,7 @@ func (orderList *OrderList) RemoveOrder(order *Order) error {
 		orderList.SaveOrder(nextOrder)
 		orderList.SaveOrder(prevOrder)
 	} else if nextOrder != nil {
+		// this might be wrong
 		nextOrder.Item.PrevOrder = emptyKey
 		orderList.Item.HeadOrder = nextOrder.Key
 
@@ -319,7 +328,13 @@ func (orderList *OrderList) RemoveOrder(order *Order) error {
 		orderList.Item.TailOrder = prevOrder.Key
 
 		orderList.SaveOrder(prevOrder)
+	} else {
+		// empty
+		orderList.Item.HeadOrder = emptyKey
+		orderList.Item.TailOrder = emptyKey
 	}
+
+	// fmt.Println("AFTER DELETE", orderList.String(0))
 
 	return orderList.Save()
 }

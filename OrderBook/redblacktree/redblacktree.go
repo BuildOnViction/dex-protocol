@@ -13,9 +13,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-const (
-	itemCacheLimit = 1024
-)
+// const (
+// 	itemCacheLimit = 1024
+// )
 
 type Comparator func(a, b []byte) int
 type EncodeToBytes func(*Item) ([]byte, error)

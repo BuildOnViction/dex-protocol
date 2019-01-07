@@ -12,6 +12,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
+	lru "github.com/hashicorp/golang-lru"
+)
+
+const (
+	itemCacheLimit = 1024
 )
 
 type OrderTreeItem struct {
@@ -30,6 +35,8 @@ type OrderTree struct {
 	OrderDB *ethdb.LDBDatabase // this is for order
 
 	Item *OrderTreeItem
+
+	orderListCache *lru.Cache // Cache for the recent orderList
 }
 
 // NewOrderTree create new order tree
@@ -38,7 +45,7 @@ func NewOrderTree(datadir string) *OrderTree {
 	orderListDBPath := path.Join(datadir, "pricetree")
 	orderDBPath := path.Join(datadir, "order")
 	priceTree := NewRedBlackTreeExtended(orderListDBPath)
-
+	itemCache, _ := lru.New(itemCacheLimit)
 	orderDB, _ := ethdb.NewLDBDatabase(orderDBPath, 0, 0)
 
 	item := &OrderTreeItem{
@@ -46,9 +53,11 @@ func NewOrderTree(datadir string) *OrderTree {
 		NumOrders: 0,
 		Depth:     0,
 	}
+
 	orderTree := &OrderTree{
-		OrderDB: orderDB,
-		Item:    item,
+		OrderDB:        orderDB,
+		Item:           item,
+		orderListCache: itemCache,
 	}
 
 	// must restore from db first to make sure we get corrent information
@@ -75,6 +84,7 @@ func (orderTree *OrderTree) Save() error {
 		orderTree.Item.PriceTreeKey = priceTreeRoot.Key
 	}
 	ordertreeBytes, err := rlp.EncodeToBytes(orderTree.Item)
+	// ordertreeBytes, err := json.Marshal(orderTree.Item)
 	// fmt.Printf("ordertree bytes : %s, %x\n", ToJSON(orderTree.Item), ordertreeBytes)
 	if err != nil {
 		fmt.Println(err)
@@ -89,6 +99,7 @@ func (orderTree *OrderTree) Restore() error {
 	// fmt.Printf("ordertree bytes : %x\n", ordertreeBytes)
 	if err == nil {
 		return rlp.DecodeBytes(ordertreeBytes, orderTree.Item)
+		// return json.Unmarshal(ordertreeBytes, orderTree.Item)
 	}
 	return err
 }
@@ -141,13 +152,29 @@ func (orderTree *OrderTree) getKeyFromPrice(price *big.Int) []byte {
 
 // PriceList : get the price list from the price map using price as key
 func (orderTree *OrderTree) PriceList(price *big.Int) *OrderList {
+	// this will be wrong, we must return existing orderList
+	// orderList := NewOrderList(price, orderTree)
 
-	orderList := NewOrderList(price, orderTree)
-	bytes, found := orderTree.PriceTree.Get(orderList.Key)
+	cacheKey := price.String()
+	// cache hit
+	if cached, ok := orderTree.orderListCache.Get(cacheKey); ok {
+		return cached.(*OrderList)
+	}
+
+	key := orderTree.getKeyFromPrice(price)
+
+	bytes, found := orderTree.PriceTree.Get(key)
 
 	if found {
 		// update Item
-		rlp.DecodeBytes(bytes, orderList.Item)
+		// rlp.DecodeBytes(bytes, orderList.Item)
+		// return orderList
+
+		orderList := orderTree.decodeOrderList(bytes)
+
+		// update cache
+		orderTree.orderListCache.Add(cacheKey, orderList)
+
 		return orderList
 	}
 
@@ -157,12 +184,18 @@ func (orderTree *OrderTree) PriceList(price *big.Int) *OrderList {
 
 // CreatePrice : create new price list into PriceTree and PriceMap
 func (orderTree *OrderTree) CreatePrice(price *big.Int) *OrderList {
+
 	orderTree.Item.Depth++
 	newList := NewOrderList(price, orderTree)
 	// put new price list into tree
 	newList.Save()
+
 	// should use batch to optimize the performance
 	orderTree.Save()
+
+	// update cache
+	orderTree.orderListCache.Add(price.String(), newList)
+
 	return newList
 }
 
@@ -173,6 +206,9 @@ func (orderTree *OrderTree) RemovePrice(price *big.Int) {
 		orderListKey := orderTree.getKeyFromPrice(price)
 		orderTree.PriceTree.Remove(orderListKey)
 
+		// also remove from cache to trigger cache miss
+		orderTree.orderListCache.Remove(price.String())
+
 		// should use batch to optimize the performance
 		orderTree.Save()
 	}
@@ -180,6 +216,12 @@ func (orderTree *OrderTree) RemovePrice(price *big.Int) {
 
 // PriceExist : check price existed
 func (orderTree *OrderTree) PriceExist(price *big.Int) bool {
+
+	// cache hit
+	if orderTree.orderListCache.Contains(price.String()) {
+		return true
+	}
+
 	orderListKey := orderTree.getKeyFromPrice(price)
 
 	_, found := orderTree.PriceTree.Get(orderListKey)
@@ -290,7 +332,34 @@ func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 	orderTree.Save()
 }
 
-func (orderTree *OrderTree) RemoveOrder(order *Order) error {
+func (orderTree *OrderTree) RemoveOrderFromOrderList(order *Order, orderList *OrderList) error {
+	// next update orderList
+	err := orderList.RemoveOrder(order)
+
+	if err != nil {
+		return err
+	}
+
+	// no items left than safety remove
+	if orderList.Item.Length == 0 {
+		orderTree.RemovePrice(order.Item.Price)
+		fmt.Println("REMOVE price list", order.Item.Price.String())
+	}
+
+	// update orderTree
+	orderTree.Item.Volume = Sub(orderTree.Item.Volume, order.Item.Quantity)
+
+	// delete(orderTree.OrderMap, orderID)
+	orderTree.Item.NumOrders--
+
+	// fmt.Println(orderTree.String(0))
+	// fmt.Println("AFTER DELETE", orderList.String(0))
+
+	// should use batch to optimize the performance
+	return orderTree.Save()
+}
+
+func (orderTree *OrderTree) RemoveOrder(order *Order) (*OrderList, error) {
 	// fmt.Printf("Node :%#v \n", order.Item)
 
 	// then remove order from orderDB, 1 order can belong to muliple order price?
@@ -301,37 +370,40 @@ func (orderTree *OrderTree) RemoveOrder(order *Order) error {
 	// 	// stop other operations
 	// 	return err
 	// }
-
+	var err error
 	// get orderList by price, if there is orderlist, we will update it
 	orderList := orderTree.PriceList(order.Item.Price)
 	if orderList != nil {
 		// next update orderList
-		err := orderList.RemoveOrder(order)
+		// err := orderList.RemoveOrder(order)
 
-		if err != nil {
-			return err
-		}
+		// if err != nil {
+		// 	return nil, err
+		// }
 
-		// no items left than safety remove
-		if orderList.Item.Length == 0 {
-			orderTree.RemovePrice(order.Item.Price)
-			fmt.Println("REMOVE price list", order.Item.Price.String())
-		}
+		// // no items left than safety remove
+		// if orderList.Item.Length == 0 {
+		// 	orderTree.RemovePrice(order.Item.Price)
+		// 	fmt.Println("REMOVE price list", order.Item.Price.String())
+		// }
 
-		// update orderTree
-		orderTree.Item.Volume = Sub(orderTree.Item.Volume, order.Item.Quantity)
+		// // update orderTree
+		// orderTree.Item.Volume = Sub(orderTree.Item.Volume, order.Item.Quantity)
 
-		// delete(orderTree.OrderMap, orderID)
-		orderTree.Item.NumOrders--
+		// // delete(orderTree.OrderMap, orderID)
+		// orderTree.Item.NumOrders--
 
-		// fmt.Println(orderTree.String(0))
+		// // fmt.Println(orderTree.String(0))
+		// // fmt.Println("AFTER DELETE", orderList.String(0))
 
-		// should use batch to optimize the performance
-		return orderTree.Save()
+		// // should use batch to optimize the performance
+		// err = orderTree.Save()
+
+		err = orderTree.RemoveOrderFromOrderList(order, orderList)
 
 	}
 
-	return nil
+	return orderList, err
 
 }
 
@@ -356,7 +428,12 @@ func (orderTree *OrderTree) getOrderListItem(bytes []byte) *OrderListItem {
 
 func (orderTree *OrderTree) decodeOrderList(bytes []byte) *OrderList {
 	item := orderTree.getOrderListItem(bytes)
-	return NewOrderListWithItem(item, orderTree)
+	orderList := NewOrderListWithItem(item, orderTree)
+
+	// update cache
+	orderTree.orderListCache.Add(item.Price.String(), orderList)
+
+	return orderList
 	// return &OrderList{
 	// 	Item:      item,
 	// 	Key:       orderTree.getKeyFromPrice(item.Price),

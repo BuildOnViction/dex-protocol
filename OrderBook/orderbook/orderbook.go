@@ -150,7 +150,8 @@ func (orderbook *OrderBook) processMarketOrder(quote map[string]string, verbose 
 			quantityToTrade, newTrades = orderbook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 		}
-	} else if side == ASK {
+		// } else if side == ASK {
+	} else {
 		for quantityToTrade.Cmp(Zero()) > 0 && orderbook.Bids.NotEmpty() {
 			bestPriceBids := orderbook.Bids.MaxPriceList()
 			quantityToTrade, newTrades = orderbook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
@@ -187,7 +188,8 @@ func (orderbook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 			orderInBook = quote
 		}
 
-	} else if side == ASK {
+		// } else if side == ASK {
+	} else {
 		maxPrice := orderbook.Bids.MaxPrice()
 		for quantityToTrade.Cmp(Zero()) > 0 && orderbook.Bids.NotEmpty() && price.Cmp(maxPrice) <= 0 {
 			bestPriceBids := orderbook.Bids.MaxPriceList()
@@ -232,13 +234,17 @@ func (orderbook *OrderBook) ProcessOrder(quote map[string]string, verbose bool) 
 // processOrderList : process the order list
 func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, quantityStillToTrade *big.Int, quote map[string]string, verbose bool) (*big.Int, []map[string]string) {
 	quantityToTrade := CloneBigInt(quantityStillToTrade)
+	// quantityToTrade := quantityStillToTrade
 	var trades []map[string]string
 	// var watchDog = 0
-	for orderList.Item.Length > 0 && quantityToTrade.Cmp(Zero()) > 0 {
-		headOrder := orderList.GetOrder(orderList.Item.HeadOrder)
+	// fmt.Printf("CMP problem :%t - %t\n", quantityToTrade.Cmp(Zero()) > 0, IsGreaterThan(quantityToTrade, Zero()))
+	for orderList.Item.Length > 0 && IsStrictlyGreaterThan(quantityToTrade, Zero()) {
 
+		headOrder := orderList.GetOrder(orderList.Item.HeadOrder)
+		fmt.Printf("Head :%x ,%s\n", orderList.Item.HeadOrder, orderbook.Asks.String(0))
 		if headOrder == nil {
-			fmt.Printf("\n\nFAIL : %x, %s\n\n", orderList.Item.HeadOrder, orderList.String(0))
+
+			panic("stuck here")
 			return Zero(), trades
 		}
 		tradedPrice := CloneBigInt(headOrder.Item.Price)
@@ -246,14 +252,14 @@ func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, 
 		var newBookQuantity *big.Int
 		var tradedQuantity *big.Int
 
-		if quantityToTrade.Cmp(headOrder.Item.Quantity) < 0 {
+		if IsStrictlySmallerThan(quantityToTrade, headOrder.Item.Quantity) {
 			tradedQuantity = CloneBigInt(quantityToTrade)
 			// Do the transaction
 			newBookQuantity = Sub(headOrder.Item.Quantity, quantityToTrade)
 			headOrder.UpdateQuantity(orderList, newBookQuantity, headOrder.Item.Timestamp)
 			quantityToTrade = Zero()
 
-		} else if quantityToTrade.Cmp(headOrder.Item.Quantity) == 0 {
+		} else if IsEqual(quantityToTrade, headOrder.Item.Quantity) {
 			tradedQuantity = CloneBigInt(quantityToTrade)
 			if side == BID {
 				// orderbook.Bids.RemoveOrderByID(headOrder.Key)
@@ -271,7 +277,11 @@ func (orderbook *OrderBook) processOrderList(side string, orderList *OrderList, 
 				orderbook.Bids.RemoveOrder(headOrder)
 			} else {
 				// orderbook.Asks.RemoveOrderByID(headOrder.Key)
-				orderbook.Asks.RemoveOrder(headOrder)
+				fmt.Printf("\nBEFORE : %s\n\n", orderList.String(0))
+				// orderList, _ = orderbook.Asks.RemoveOrder(headOrder)
+				orderbook.Asks.RemoveOrderFromOrderList(headOrder, orderList)
+				fmt.Println("AFTER DELETE", orderList.String(0))
+				fmt.Printf("\nAFTER : %x, %s\n\n", orderList.Item.HeadOrder, orderList.String(0))
 			}
 		}
 
@@ -352,6 +362,7 @@ func (orderbook *OrderBook) VolumeAtPrice(side string, price *big.Int) *big.Int 
 	if side == BID {
 		if orderbook.Bids.PriceExist(price) {
 			orderList := orderbook.Bids.PriceList(price)
+			// incase we use cache for PriceList
 			volume = CloneBigInt(orderList.Item.Volume)
 		}
 	} else {

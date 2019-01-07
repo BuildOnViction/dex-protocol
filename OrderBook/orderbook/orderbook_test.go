@@ -113,65 +113,63 @@ func TestOrderBook(t *testing.T) {
 		trades, orderInBook = orderBook.ProcessOrder(order, true)
 	}
 
-	// value := ToBigInt("101")
-	// if orderBook.BestAsk().Cmp(value) != 0 {
-	// 	t.Errorf("orderBook.BestAsk incorrect, got: %v, want: %v.", orderBook.BestAsk(), value)
-	// }
+	value := ToBigInt("101")
+	if orderBook.BestAsk().Cmp(value) != 0 {
+		t.Errorf("orderBook.BestAsk incorrect, got: %v, want: %v.", orderBook.BestAsk(), value)
+	}
 
-	// value = ToBigInt("103")
-	// if orderBook.WorstAsk().Cmp(value) != 0 {
-	// 	t.Errorf("orderBook.WorstAsk incorrect, got: %v, want: %v.", orderBook.WorstAsk(), value)
-	// }
+	value = ToBigInt("103")
+	if orderBook.WorstAsk().Cmp(value) != 0 {
+		t.Errorf("orderBook.WorstAsk incorrect, got: %v, want: %v.", orderBook.WorstAsk(), value)
+	}
 
-	// value = ToBigInt("99")
-	// if orderBook.BestBid().Cmp(value) != 0 {
-	// 	t.Errorf("orderBook.BestBid incorrect, got: %v, want: %v.", orderBook.BestBid(), value)
-	// }
+	value = ToBigInt("99")
+	if orderBook.BestBid().Cmp(value) != 0 {
+		t.Errorf("orderBook.BestBid incorrect, got: %v, want: %v.", orderBook.BestBid(), value)
+	}
 
-	// value = ToBigInt("97")
-	// if orderBook.WorstBid().Cmp(value) != 0 {
-	// 	t.Errorf("orderBook.WorstBid incorrect, got: %v, want: %v.", orderBook.WorstBid(), value)
-	// }
+	value = ToBigInt("97")
+	if orderBook.WorstBid().Cmp(value) != 0 {
+		t.Errorf("orderBook.WorstBid incorrect, got: %v, want: %v.", orderBook.WorstBid(), value)
+	}
 
-	// value = ToBigInt("15")
-	// pricePoint := ToBigInt("101")
-	// if orderBook.VolumeAtPrice(ASK, pricePoint).Cmp(value) != 0 {
-	// 	t.Errorf("orderBook.VolumeAtPrice incorrect, got: %v, want: %v.", orderBook.VolumeAtPrice(ASK, pricePoint), value)
-	// }
+	value = ToBigInt("15")
+	pricePoint := ToBigInt("101")
+	if orderBook.VolumeAtPrice(ASK, pricePoint).Cmp(value) != 0 {
+		t.Errorf("orderBook.VolumeAtPrice incorrect, got: %v, want: %v.", orderBook.VolumeAtPrice(ASK, pricePoint), value)
+	}
 
-	// //Submitting a limit order that crosses the opposing best price will result in a trade
-	// marketOrder := make(map[string]string)
-	// marketOrder["type"] = "limit"
-	// marketOrder["side"] = BID
-	// marketOrder["quantity"] = "2"
-	// marketOrder["price"] = "102"
-	// marketOrder["trade_id"] = "109"
+	//Submitting a limit order that crosses the opposing best price will result in a trade
+	marketOrder := make(map[string]string)
+	marketOrder["type"] = "limit"
+	marketOrder["side"] = BID
+	marketOrder["quantity"] = "2"
+	marketOrder["price"] = "102"
+	marketOrder["trade_id"] = "109"
 
-	// trades, orderInBook = orderBook.ProcessOrder(marketOrder, true)
+	trades, orderInBook = orderBook.ProcessOrder(marketOrder, true)
 
-	// tradedPrice := trades[0]["price"]
-	// tradedQuantity := trades[0]["quantity"]
+	tradedPrice := trades[0]["price"]
+	tradedQuantity := trades[0]["quantity"]
 
-	// if !(tradedPrice == "101" && tradedQuantity == "2" && len(orderInBook) == 0) {
-	// 	t.Errorf("orderBook.ProcessOrder incorrect")
-	// }
+	if !(tradedPrice == "101" && tradedQuantity == "2" && len(orderInBook) == 0) {
+		t.Errorf("orderBook.ProcessOrder incorrect")
+	}
 
-	// // If a limit crosses but is only partially matched, the remaning volume will
-	// // be placed in the book as an outstanding order
-	// bigOrder := make(map[string]string)
-	// bigOrder["type"] = "limit"
-	// bigOrder["side"] = BID
-	// bigOrder["quantity"] = "50"
-	// bigOrder["price"] = "102"
-	// bigOrder["trade_id"] = "110"
+	// If a limit crosses but is only partially matched, the remaning volume will
+	// be placed in the book as an outstanding order
+	bigOrder := make(map[string]string)
+	bigOrder["type"] = "limit"
+	bigOrder["side"] = BID
+	bigOrder["quantity"] = "50"
+	bigOrder["price"] = "102"
+	bigOrder["trade_id"] = "110"
 
-	// trades, orderInBook = orderBook.ProcessOrder(bigOrder, true)
+	trades, orderInBook = orderBook.ProcessOrder(bigOrder, true)
 
-	// t.Logf("\nTrade :%s\nOrderInBook :%s", ToJSON(trades), ToJSON(orderInBook))
-
-	// if !(len(orderInBook) != 0) {
-	// 	t.Errorf("orderBook.ProcessOrder incorrect")
-	// }
+	if len(orderInBook) == 0 {
+		t.Errorf("orderBook.ProcessOrder incorrect")
+	}
 
 	// // Market orders only require that a user specifies a side (bid or ask), a quantity, and their unique trade id
 	// marketOrder = make(map[string]string)
@@ -185,7 +183,7 @@ func TestOrderBook(t *testing.T) {
 	// orderList := orderBook.Asks.MaxPriceList()
 	// t.Logf("Best ask List : %s", orderList.String(0))
 	// t.Log(orderBook.Asks.PriceTree)
-	t.Logf("\n Trade :%s, order in book :%s\n", ToJSON(trades), ToJSON(orderInBook))
+	t.Logf("\nTrade :%s\nOrderInBook :%s", ToJSON(trades), ToJSON(orderInBook))
 	t.Logf("\nOrderBook :%s", orderBook.String(0))
 
 }
