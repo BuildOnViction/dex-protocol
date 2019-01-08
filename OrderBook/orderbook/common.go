@@ -20,6 +20,7 @@ const (
 	// Decimals = 18
 )
 
+// use alloc to prevent reference manipulation
 func EmptyKey() []byte {
 	key := make([]byte, common.HashLength)
 	return key
