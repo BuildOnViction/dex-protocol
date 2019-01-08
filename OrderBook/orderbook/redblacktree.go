@@ -470,7 +470,7 @@ func (tree *Tree) replaceNode(old *Node, new *Node) {
 	// we do not change any byte of Key so we can copy the reference to save directly to db
 	var newKey []byte
 	if new == nil {
-		newKey = EmptyKey
+		newKey = EmptyKey()
 	} else {
 		newKey = new.Key
 	}

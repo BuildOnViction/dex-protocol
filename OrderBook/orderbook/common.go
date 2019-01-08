@@ -12,12 +12,18 @@ type EncodeToBytes func(interface{}) ([]byte, error)
 type DecodeBytes func([]byte, interface{}) error
 type FormatBytes func([]byte) string
 
-var EmptyKey = make([]byte, common.HashLength)
-
 const (
 	TrueByte  = byte(1)
 	FalseByte = byte(0)
+
+	// // maximum 18 bytes for big.Int like quantity, price, volume
+	// Decimals = 18
 )
+
+func EmptyKey() []byte {
+	key := make([]byte, common.HashLength)
+	return key
+}
 
 func Bool2byte(bln bool) byte {
 	if bln == true {

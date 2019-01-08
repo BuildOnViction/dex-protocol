@@ -69,8 +69,8 @@ func NewOrder(quote map[string]string, orderList []byte) *Order {
 		Price:     price,
 		// OrderID:   orderID,
 		TradeID:   tradeID,
-		NextOrder: EmptyKey,
-		PrevOrder: EmptyKey,
+		NextOrder: EmptyKey(),
+		PrevOrder: EmptyKey(),
 		OrderList: orderList,
 	}
 

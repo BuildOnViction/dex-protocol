@@ -20,8 +20,6 @@ const (
 )
 
 type OrderListItem struct {
-	// HeadOrder *Order          `json:"headOrder"`
-	// TailOrder *Order          `json:"tailOrder"`
 	HeadOrder []byte   `json:"headOrder"`
 	TailOrder []byte   `json:"tailOrder"`
 	Length    uint64   `json:"length"`
@@ -46,8 +44,8 @@ func NewOrderList(price *big.Int, orderTree *OrderTree) *OrderList {
 		// HeadOrder: nil,
 		// TailOrder: nil,
 		// set to default common.Hash
-		HeadOrder: EmptyKey,
-		TailOrder: EmptyKey,
+		HeadOrder: EmptyKey(),
+		TailOrder: EmptyKey(),
 		Length:    0,
 		Volume:    Zero(),
 		Price:     CloneBigInt(price),
@@ -254,11 +252,11 @@ func (orderList *OrderList) SaveOrder(order *Order) error {
 func (orderList *OrderList) AppendOrder(order *Order) error {
 
 	if orderList.Item.Length == 0 {
-		order.Item.NextOrder = EmptyKey
-		order.Item.PrevOrder = EmptyKey
+		order.Item.NextOrder = EmptyKey()
+		order.Item.PrevOrder = EmptyKey()
 	} else {
 		order.Item.PrevOrder = orderList.Item.TailOrder
-		order.Item.NextOrder = EmptyKey
+		order.Item.NextOrder = EmptyKey()
 	}
 
 	// save into database first
@@ -326,19 +324,19 @@ func (orderList *OrderList) RemoveOrder(order *Order) error {
 		orderList.SaveOrder(prevOrder)
 	} else if nextOrder != nil {
 		// this might be wrong
-		nextOrder.Item.PrevOrder = EmptyKey
+		nextOrder.Item.PrevOrder = EmptyKey()
 		orderList.Item.HeadOrder = nextOrder.Key
 
 		orderList.SaveOrder(nextOrder)
 	} else if prevOrder != nil {
-		prevOrder.Item.NextOrder = EmptyKey
+		prevOrder.Item.NextOrder = EmptyKey()
 		orderList.Item.TailOrder = prevOrder.Key
 
 		orderList.SaveOrder(prevOrder)
 	} else {
 		// empty
-		orderList.Item.HeadOrder = EmptyKey
-		orderList.Item.TailOrder = EmptyKey
+		orderList.Item.HeadOrder = EmptyKey()
+		orderList.Item.TailOrder = EmptyKey()
 	}
 
 	// fmt.Println("AFTER DELETE", orderList.String(0))

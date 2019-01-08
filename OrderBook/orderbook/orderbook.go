@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -36,78 +34,6 @@ type OrderBook struct {
 
 	Key  []byte
 	slot *big.Int
-}
-
-func EncodeBytesItem(val interface{}) ([]byte, error) {
-	item, ok := val.(*Item)
-	if !ok {
-		return rlp.EncodeToBytes(val)
-	}
-
-	// try with order item
-	start := 3 * common.HashLength
-
-	// red-black is 1 byte
-	totalLength := start + 1
-	if item.Value != nil {
-		totalLength += len(item.Value)
-	}
-
-	returnBytes := make([]byte, totalLength)
-
-	if item.Keys != nil {
-		copy(returnBytes[0:common.HashLength], item.Keys.Left)
-		copy(returnBytes[common.HashLength:2*common.HashLength], item.Keys.Right)
-		copy(returnBytes[2*common.HashLength:start], item.Keys.Parent)
-	}
-	returnBytes[start] = Bool2byte(item.Color)
-	start++
-	// returnBytes[start] = bool2byte(item.Deleted)
-	// start++
-	if start < totalLength {
-		copy(returnBytes[start:], item.Value)
-	}
-
-	// fmt.Printf("value :%x\n", returnBytes)
-
-	return returnBytes, nil
-}
-
-func DecodeBytesItem(bytes []byte, val interface{}) error {
-
-	item, ok := val.(*Item)
-
-	// fmt.Println("HERE", item, bytes)
-
-	if !ok {
-		return rlp.DecodeBytes(bytes, val)
-	}
-
-	// try with OrderItem
-	start := 3 * common.HashLength
-	totalLength := len(bytes)
-	if item.Keys == nil {
-		item.Keys = &KeyMeta{
-			Left:   make([]byte, common.HashLength),
-			Right:  make([]byte, common.HashLength),
-			Parent: make([]byte, common.HashLength),
-		}
-	}
-	copy(item.Keys.Left, bytes[0:common.HashLength])
-	copy(item.Keys.Right, bytes[common.HashLength:2*common.HashLength])
-	copy(item.Keys.Parent, bytes[2*common.HashLength:start])
-	item.Color = Byte2bool(bytes[start])
-	start++
-	// item.Deleted = byte2bool(bytes[start])
-	// start++
-	if start < totalLength {
-		item.Value = make([]byte, totalLength-start)
-		copy(item.Value, bytes[start:])
-	}
-
-	// fmt.Printf("Item key : %#v\n", item.Keys)
-
-	return nil
 }
 
 // NewOrderBook : return new order book

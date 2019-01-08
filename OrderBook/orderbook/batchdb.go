@@ -24,10 +24,10 @@ type BatchDatabase struct {
 	db             *ethdb.LDBDatabase
 	itemCacheLimit int
 	itemMaxPending int
-	// EmptyKey       []byte
-	pendingItems map[string]*BatchItem
-	cacheItems   *lru.Cache // Cache for reading
-	Debug        bool
+	emptyKey       []byte
+	pendingItems   map[string]*BatchItem
+	cacheItems     *lru.Cache // Cache for reading
+	Debug          bool
 
 	EncodeToBytes EncodeToBytes
 	DecodeBytes   DecodeBytes
@@ -54,12 +54,13 @@ func NewBatchDatabase(datadir string, cacheLimit, maxPending int) *BatchDatabase
 		itemCacheLimit: itemCacheLimit,
 		itemMaxPending: itemMaxPending,
 		cacheItems:     cacheItems,
+		emptyKey:       EmptyKey(), // pre alloc for comparison
 		pendingItems:   make(map[string]*BatchItem),
 	}
 }
 
 func (db *BatchDatabase) IsEmptyKey(key []byte) bool {
-	return key == nil || len(key) == 0 || bytes.Equal(key, EmptyKey)
+	return key == nil || len(key) == 0 || bytes.Equal(key, db.emptyKey)
 }
 
 func (db *BatchDatabase) getCacheKey(key []byte) string {
