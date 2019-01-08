@@ -33,8 +33,13 @@ type BatchDatabase struct {
 	DecodeBytes   DecodeBytes
 }
 
-// batchdatabase is a fast cache db to retrieve in-mem object
+// NewBatchDatabase use rlp as encoding
 func NewBatchDatabase(datadir string, cacheLimit, maxPending int) *BatchDatabase {
+	return NewBatchDatabaseWithEncode(datadir, cacheLimit, maxPending, rlp.EncodeToBytes, rlp.DecodeBytes)
+}
+
+// batchdatabase is a fast cache db to retrieve in-mem object
+func NewBatchDatabaseWithEncode(datadir string, cacheLimit, maxPending int, encode EncodeToBytes, decode DecodeBytes) *BatchDatabase {
 	db, _ := ethdb.NewLDBDatabase(datadir, 128, 1024)
 	itemCacheLimit := defaultCacheLimit
 	if cacheLimit > 0 {
@@ -47,16 +52,19 @@ func NewBatchDatabase(datadir string, cacheLimit, maxPending int) *BatchDatabase
 
 	cacheItems, _ := lru.New(defaultCacheLimit)
 
-	return &BatchDatabase{
+	batchDB := &BatchDatabase{
 		db:             db,
-		EncodeToBytes:  rlp.EncodeToBytes,
-		DecodeBytes:    rlp.DecodeBytes,
+		EncodeToBytes:  encode,
+		DecodeBytes:    decode,
 		itemCacheLimit: itemCacheLimit,
 		itemMaxPending: itemMaxPending,
 		cacheItems:     cacheItems,
 		emptyKey:       EmptyKey(), // pre alloc for comparison
 		pendingItems:   make(map[string]*BatchItem),
 	}
+
+	return batchDB
+
 }
 
 func (db *BatchDatabase) IsEmptyKey(key []byte) bool {

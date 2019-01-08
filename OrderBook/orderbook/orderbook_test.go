@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewOrderBook(t *testing.T) {
-	orderBook := NewOrderBook(datadir)
+	orderBook := NewOrderBook("TOMO", testDB)
 	// // try to restore before next operation
 	// orderBook.Restore()
 
@@ -31,7 +31,7 @@ func TestNewOrderBook(t *testing.T) {
 }
 
 func TestOrderBook(t *testing.T) {
-	orderBook := NewOrderBook(datadir)
+	orderBook := NewOrderBook("TOMO", testDB)
 	orderBook.Restore()
 
 	limitOrders := make([]map[string]string, 0)
@@ -206,7 +206,7 @@ func TestOrderBook(t *testing.T) {
 }
 
 func TestOrderBookRestore(t *testing.T) {
-	orderBook := NewOrderBook(datadir)
+	orderBook := NewOrderBook("TOMO", testDB)
 	orderBook.SetDebug(true)
 
 	orderBook.Restore()

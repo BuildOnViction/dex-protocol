@@ -20,11 +20,11 @@ type OrderTree struct {
 	PriceTree *RedBlackTreeExtended `json:"priceTree"`
 	// PriceMap  map[string]*OrderList `json:"priceMap"`  // Dictionary containing price : OrderList object
 	// OrderMap  map[string]*Order     `json:"orderMap"`  // Dictionary containing order_id : Order object
-
-	orderDB *BatchDatabase // this is for order
-	slot    *big.Int
-	Key     []byte
-	Item    *OrderTreeItem
+	orderBook *OrderBook
+	orderDB   *BatchDatabase // this is for order
+	slot      *big.Int
+	Key       []byte
+	Item      *OrderTreeItem
 
 	// orderListCache *lru.Cache // Cache for the recent orderList
 }
@@ -163,9 +163,11 @@ func (orderTree *OrderTree) GetOrder(key []byte, price *big.Int) *Order {
 // }
 
 func (orderTree *OrderTree) getSlotFromPrice(price *big.Int) *big.Int {
-	// orderListKey, _ := price.GobEncode()
+	// orderListKey, _ := price.GobEncode(
 	return Add(orderTree.slot, price)
-
+	// return crypto.Keccak256(orderTree.slot.Bytes(), common.BigToHash(price).Bytes())
+	// orderListKey := orderTree.getKeyFromPrice(price)
+	// return new(big.Int).SetBytes(orderListKey)
 }
 
 // next time this price will be big.Int
@@ -173,6 +175,9 @@ func (orderTree *OrderTree) getKeyFromPrice(price *big.Int) []byte {
 	// orderListKey, _ := price.GobEncode()
 	orderListKey := orderTree.getSlotFromPrice(price)
 	return GetKeyFromBig(orderListKey)
+	// price is like index of array, so it is faster to calculate with hash ordertree.price = [1,4,5]
+	// so we use hash(key . subkey)
+	// return crypto.Keccak256(orderTree.Key, GetKeyFromBig(price))
 }
 
 // PriceList : get the price list from the price map using price as key

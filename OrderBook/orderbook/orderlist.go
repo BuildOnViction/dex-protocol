@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -64,10 +65,15 @@ func NewOrderListWithItem(item *OrderListItem, orderTree *OrderTree) *OrderList 
 		orderTree: orderTree,
 	}
 
-	// orderList.slot = Zero()
-	// priceKey will be slot of order tree + plus price key
-	//
-	orderList.slot = new(big.Int).SetBytes(crypto.Keccak256(key))
+	// we can use orderList slot as orderbook slot to store sequential of orders
+	if orderTree.orderBook != nil {
+		orderList.slot = orderTree.orderBook.slot
+	} else {
+		// orderList.slot = Zero()
+		// priceKey will be slot of order tree + plus price key
+		//
+		orderList.slot = new(big.Int).SetBytes(crypto.Keccak256(key))
+	}
 
 	return orderList
 }
@@ -202,11 +208,11 @@ func (orderList *OrderList) Save() error {
 // otherwise just use 1 db for storing all orders of all pricelists
 // currently we use auto increase ment id so no need slot
 func (orderList *OrderList) GetOrderIDFromKey(key []byte) []byte {
-	// orderSlot := new(big.Int).SetBytes(key)
+	orderSlot := new(big.Int).SetBytes(key)
 	// fmt.Println("FAIL", key, orderList.slot)
-	// return common.BigToHash(Add(orderList.slot, orderSlot)).Bytes()
-
-	return key
+	return common.BigToHash(Add(orderList.slot, orderSlot)).Bytes()
+	// orderbook:[1,2,3,4]
+	// return key
 }
 
 // GetOrderID return the real slot key of order in this linked list

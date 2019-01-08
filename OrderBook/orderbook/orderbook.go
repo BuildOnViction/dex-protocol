@@ -3,11 +3,11 @@ package orderbook
 import (
 	"fmt"
 	"math/big"
-	"path"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -19,6 +19,9 @@ const (
 	ORDERTYPE_MARKET = "market"
 	ORDERTYPE_LIMIT  = "limit"
 )
+
+var askSlotKey = common.StringToHash(ASK).Bytes()
+var bidSlotKey = common.StringToHash(BID).Bytes()
 
 type OrderBookItem struct {
 	Timestamp   uint64 `json:"time"`
@@ -37,26 +40,24 @@ type OrderBook struct {
 }
 
 // NewOrderBook : return new order book
-func NewOrderBook(datadir string) *OrderBook {
+func NewOrderBook(name string, db *BatchDatabase) *OrderBook {
 
 	// we can implement using only one DB to faciliate cache engine
 	// so that we use a big.Int number to seperate domain of the keys
 	// like this keccak("orderBook") + key
-	orderBookPath := path.Join(datadir, "orderbook")
-	db := NewBatchDatabase(orderBookPath, 0, 0)
+	// orderBookPath := path.Join(datadir, "orderbook")
+	// db := NewBatchDatabase(orderBookPath, 0, 0)
 
-	// override Encode and Decode for better performance
-	db.EncodeToBytes = EncodeBytesItem
-	db.DecodeBytes = DecodeBytesItem
+	// do slot with hash to prevent collision
 
-	// do slot
-	key := crypto.Keccak256([]byte("orderbook"))
+	// we convert to lower case, so even with name as contract address, it is still correct
+	// without converting back from hex to bytes
+	key := crypto.Keccak256([]byte(strings.ToLower(name)))
 	slot := new(big.Int).SetBytes(key)
-	bidsKey := crypto.Keccak256([]byte("bids"))
-	asksKey := crypto.Keccak256([]byte("asks"))
 
-	bids := NewOrderTree(db, bidsKey)
-	asks := NewOrderTree(db, asksKey)
+	// hash ( orderBookKey . orderTreeKey )
+	bidsKey := crypto.Keccak256(key, bidSlotKey)
+	asksKey := crypto.Keccak256(key, askSlotKey)
 
 	item := &OrderBookItem{
 		NextOrderID: 0,
@@ -64,13 +65,19 @@ func NewOrderBook(datadir string) *OrderBook {
 
 	orderBook := &OrderBook{
 		db:   db,
-		Bids: bids,
-		Asks: asks,
 		Item: item,
 		slot: slot,
 		Key:  key,
 	}
 
+	bids := NewOrderTree(db, bidsKey)
+	asks := NewOrderTree(db, asksKey)
+	bids.orderBook = orderBook
+	asks.orderBook = orderBook
+
+	// set asks and bids
+	orderBook.Bids = bids
+	orderBook.Asks = asks
 	// orderBook.Restore()
 
 	// no need to update when there is no operation yet
