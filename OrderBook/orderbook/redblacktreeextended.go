@@ -6,109 +6,20 @@ package orderbook
 
 import (
 	"math/big"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
-	rbt "github.com/tomochain/orderbook/redblacktree"
 )
-
-var emptyKey = make([]byte, common.HashLength)
-
-func RLPEncodeToBytes(item *rbt.Item) ([]byte, error) {
-	return rlp.EncodeToBytes(item)
-}
-
-func RLPDecodeBytes(bytes []byte, item *rbt.Item) error {
-	return rlp.DecodeBytes(bytes, item)
-}
-
-const (
-	trueByte  = byte(1)
-	falseByte = byte(0)
-)
-
-func bool2byte(bln bool) byte {
-	if bln == true {
-		return trueByte
-	}
-
-	return falseByte
-}
-
-func byte2bool(b byte) bool {
-	if b == trueByte {
-		return true
-	}
-	return false
-}
-
-func OffsetEncodeBytes(item *rbt.Item) ([]byte, error) {
-	start := 3 * common.HashLength
-	totalLength := start + 2
-	if item.Value != nil {
-		totalLength += len(item.Value)
-	}
-
-	returnBytes := make([]byte, totalLength)
-
-	if item.Keys != nil {
-		copy(returnBytes[0:common.HashLength], item.Keys.Left)
-		copy(returnBytes[common.HashLength:2*common.HashLength], item.Keys.Right)
-		copy(returnBytes[2*common.HashLength:start], item.Keys.Parent)
-	}
-	returnBytes[start] = bool2byte(item.Color)
-	start++
-	returnBytes[start] = bool2byte(item.Deleted)
-	start++
-	if start < totalLength {
-		copy(returnBytes[start:], item.Value)
-	}
-
-	// fmt.Printf("value :%x\n", returnBytes)
-
-	return returnBytes, nil
-}
-
-func OffsetDecodeBytes(bytes []byte, item *rbt.Item) error {
-	start := 3 * common.HashLength
-	totalLength := len(bytes)
-	if item.Keys == nil {
-		item.Keys = &rbt.KeyMeta{
-			Left:   make([]byte, common.HashLength),
-			Right:  make([]byte, common.HashLength),
-			Parent: make([]byte, common.HashLength),
-		}
-	}
-	copy(item.Keys.Left, bytes[0:common.HashLength])
-	copy(item.Keys.Right, bytes[common.HashLength:2*common.HashLength])
-	copy(item.Keys.Parent, bytes[2*common.HashLength:start])
-	item.Color = byte2bool(bytes[start])
-	start++
-	item.Deleted = byte2bool(bytes[start])
-	start++
-	if start < totalLength {
-		item.Value = make([]byte, totalLength-start)
-		copy(item.Value, bytes[start:])
-	}
-
-	// fmt.Printf("Item key : %#v\n", item.Keys)
-
-	return nil
-}
 
 // RedBlackTreeExtended to demonstrate how to extend a RedBlackTree to include new functions
 type RedBlackTreeExtended struct {
-	*rbt.Tree
+	*Tree
 }
 
-func NewRedBlackTreeExtended(datadir string) *RedBlackTreeExtended {
+func NewRedBlackTreeExtended(obdb *BatchDatabase) *RedBlackTreeExtended {
 
 	// setup using bytes offset
-	obdb, _ := ethdb.NewLDBDatabase(datadir, 128, 1024)
+	// obdb, _ := ethdb.NewLDBDatabase(datadir, 128, 1024)
 
 	// tree := &RedBlackTreeExtended{NewWithBytesComparator(RLPEncodeToBytes, RLPDecodeBytes, obdb)}
-	tree := &RedBlackTreeExtended{rbt.NewWith(CmpBigInt, OffsetEncodeBytes, OffsetDecodeBytes, emptyKey, obdb)}
+	tree := &RedBlackTreeExtended{NewWith(CmpBigInt, obdb)}
 
 	tree.FormatBytes = func(key []byte) string {
 		if tree.IsEmptyKey(key) {
@@ -161,7 +72,7 @@ func (tree *RedBlackTreeExtended) RemoveMax() (value []byte, deleted bool) {
 	return nil, false
 }
 
-func (tree *RedBlackTreeExtended) getMinFromNode(node *rbt.Node) (foundNode *rbt.Node, found bool) {
+func (tree *RedBlackTreeExtended) getMinFromNode(node *Node) (foundNode *Node, found bool) {
 	if node == nil {
 		return nil, false
 	}
@@ -172,7 +83,7 @@ func (tree *RedBlackTreeExtended) getMinFromNode(node *rbt.Node) (foundNode *rbt
 	return tree.getMinFromNode(nodeLeft)
 }
 
-func (tree *RedBlackTreeExtended) getMaxFromNode(node *rbt.Node) (foundNode *rbt.Node, found bool) {
+func (tree *RedBlackTreeExtended) getMaxFromNode(node *Node) (foundNode *Node, found bool) {
 	if node == nil {
 		return nil, false
 	}

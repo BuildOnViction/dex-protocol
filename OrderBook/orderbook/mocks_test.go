@@ -1,7 +1,8 @@
 package orderbook
 
 var datadir = "../datadir/testing"
-var testOrderTree = NewOrderTree(datadir + "/ordertree")
+var dbTest = NewBatchDatabase(datadir, 0, 0)
+var testOrderTree = NewOrderTree(dbTest, []byte("ordertree"))
 
 var testTimestamp uint64 = 123452342343
 var testQuanity = ToBigInt("1000")

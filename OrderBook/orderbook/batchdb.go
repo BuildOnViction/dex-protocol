@@ -1,0 +1,204 @@
+package orderbook
+
+import (
+	"bytes"
+	"encoding/hex"
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
+	lru "github.com/hashicorp/golang-lru"
+)
+
+const (
+	defaultCacheLimit = 1024
+	defaultMaxPending = 1024
+)
+
+type BatchItem struct {
+	Value   interface{}
+	Deleted bool
+}
+
+type BatchDatabase struct {
+	db             *ethdb.LDBDatabase
+	itemCacheLimit int
+	itemMaxPending int
+	// EmptyKey       []byte
+	pendingItems map[string]*BatchItem
+	cacheItems   *lru.Cache // Cache for reading
+	Debug        bool
+
+	EncodeToBytes EncodeToBytes
+	DecodeBytes   DecodeBytes
+}
+
+// batchdatabase is a fast cache db to retrieve in-mem object
+func NewBatchDatabase(datadir string, cacheLimit, maxPending int) *BatchDatabase {
+	db, _ := ethdb.NewLDBDatabase(datadir, 128, 1024)
+	itemCacheLimit := defaultCacheLimit
+	if cacheLimit > 0 {
+		itemCacheLimit = cacheLimit
+	}
+	itemMaxPending := defaultMaxPending
+	if maxPending > 0 {
+		itemMaxPending = maxPending
+	}
+
+	cacheItems, _ := lru.New(defaultCacheLimit)
+
+	return &BatchDatabase{
+		db:             db,
+		EncodeToBytes:  rlp.EncodeToBytes,
+		DecodeBytes:    rlp.DecodeBytes,
+		itemCacheLimit: itemCacheLimit,
+		itemMaxPending: itemMaxPending,
+		cacheItems:     cacheItems,
+		pendingItems:   make(map[string]*BatchItem),
+	}
+}
+
+func (db *BatchDatabase) IsEmptyKey(key []byte) bool {
+	return key == nil || len(key) == 0 || bytes.Equal(key, EmptyKey)
+}
+
+func (db *BatchDatabase) getCacheKey(key []byte) string {
+	return hex.EncodeToString(key)
+}
+
+func (db *BatchDatabase) Has(key []byte) (bool, error) {
+	if db.IsEmptyKey(key) {
+		return false, nil
+	}
+	cacheKey := db.getCacheKey(key)
+
+	// has in pending and is not deleted
+	if pendingItem, ok := db.pendingItems[cacheKey]; ok && !pendingItem.Deleted {
+		return true, nil
+	}
+
+	if db.cacheItems.Contains(cacheKey) {
+		return true, nil
+	}
+
+	return db.db.Has(key)
+}
+
+func (db *BatchDatabase) Get(key []byte, val interface{}) (interface{}, error) {
+
+	if db.IsEmptyKey(key) {
+		// return nil, fmt.Errorf("Key is invalid :%x", key)
+		return nil, nil
+	}
+
+	cacheKey := db.getCacheKey(key)
+
+	if pendingItem, ok := db.pendingItems[cacheKey]; ok {
+		if pendingItem.Deleted {
+			return nil, nil
+		}
+		// we get value from the pending item
+		return pendingItem.Value, nil
+	}
+
+	if cached, ok := db.cacheItems.Get(cacheKey); ok {
+		val = cached
+		if db.Debug {
+			fmt.Println("Cache hit :", cacheKey)
+		}
+	} else {
+
+		// we can use lru for retrieving cache item, by default leveldb support get data from cache
+		// but it is raw bytes
+		bytes, err := db.db.Get(key)
+		if err != nil {
+			// fmt.Println("DONE !!!!", cacheKey, err)
+			if db.Debug {
+				fmt.Printf("Key not found :%x\n", key)
+			}
+			return nil, err
+		}
+
+		err = db.DecodeBytes(bytes, val)
+
+		// has problem here
+		if err != nil {
+			return nil, err
+		}
+
+		// update cache when reading
+		db.cacheItems.Add(cacheKey, val)
+		// fmt.Println("DONE !!!!", cacheKey, val, err)
+
+	}
+
+	return val, nil
+}
+
+func (db *BatchDatabase) Put(key []byte, val interface{}) error {
+
+	cacheKey := db.getCacheKey(key)
+	// fmt.Println("PUT", cacheKey, val)
+	db.pendingItems[cacheKey] = &BatchItem{Value: val}
+
+	if len(db.pendingItems) >= db.itemMaxPending {
+		return db.Commit()
+	}
+
+	return nil
+}
+
+func (db *BatchDatabase) Delete(key []byte, force bool) error {
+
+	// by default, we force delete both db and cache,
+	// for better performance, we can mark a Deleted flag, to do batch delete
+	cacheKey := db.getCacheKey(key)
+
+	// force delete everything
+	if force {
+		delete(db.pendingItems, cacheKey)
+		db.cacheItems.Remove(cacheKey)
+	} else {
+		if item, ok := db.pendingItems[cacheKey]; ok {
+			item.Deleted = true
+			// remove cache key as well
+			db.cacheItems.Remove(cacheKey)
+			return nil
+		}
+	}
+
+	// cache not found, or force delete, must delete from database
+	return db.db.Delete(key)
+}
+
+func (db *BatchDatabase) Commit() error {
+
+	batch := db.db.NewBatch()
+	for cacheKey, item := range db.pendingItems {
+		key, _ := hex.DecodeString(cacheKey)
+
+		// fmt.Printf("key :%x, cacheKey :%s\n", key, cacheKey)
+
+		if item.Deleted {
+			db.db.Delete(key)
+			// cache already has this item removed
+			continue
+		}
+
+		value, err := db.EncodeToBytes(item.Value)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		batch.Put(key, value)
+
+		if db.Debug {
+			fmt.Printf("Save %x, value :%s\n", key, ToJSON(item.Value))
+		}
+	}
+	// commit pending items does not affect the cache
+	db.pendingItems = make(map[string]*BatchItem)
+	// db.cacheItems.Purge()
+	return batch.Write()
+}

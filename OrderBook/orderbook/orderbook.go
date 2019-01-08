@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -28,10 +29,85 @@ type OrderBookItem struct {
 
 // OrderBook : list of orders
 type OrderBook struct {
-	db   *ethdb.LDBDatabase // this is for orderBook
-	Bids *OrderTree         `json:"bids"`
-	Asks *OrderTree         `json:"asks"`
+	db   *BatchDatabase // this is for orderBook
+	Bids *OrderTree     `json:"bids"`
+	Asks *OrderTree     `json:"asks"`
 	Item *OrderBookItem
+
+	Key  []byte
+	slot *big.Int
+}
+
+func EncodeBytesItem(val interface{}) ([]byte, error) {
+	item, ok := val.(*Item)
+	if !ok {
+		return rlp.EncodeToBytes(val)
+	}
+
+	// try with order item
+	start := 3 * common.HashLength
+
+	// red-black is 1 byte
+	totalLength := start + 1
+	if item.Value != nil {
+		totalLength += len(item.Value)
+	}
+
+	returnBytes := make([]byte, totalLength)
+
+	if item.Keys != nil {
+		copy(returnBytes[0:common.HashLength], item.Keys.Left)
+		copy(returnBytes[common.HashLength:2*common.HashLength], item.Keys.Right)
+		copy(returnBytes[2*common.HashLength:start], item.Keys.Parent)
+	}
+	returnBytes[start] = Bool2byte(item.Color)
+	start++
+	// returnBytes[start] = bool2byte(item.Deleted)
+	// start++
+	if start < totalLength {
+		copy(returnBytes[start:], item.Value)
+	}
+
+	// fmt.Printf("value :%x\n", returnBytes)
+
+	return returnBytes, nil
+}
+
+func DecodeBytesItem(bytes []byte, val interface{}) error {
+
+	item, ok := val.(*Item)
+
+	// fmt.Println("HERE", item, bytes)
+
+	if !ok {
+		return rlp.DecodeBytes(bytes, val)
+	}
+
+	// try with OrderItem
+	start := 3 * common.HashLength
+	totalLength := len(bytes)
+	if item.Keys == nil {
+		item.Keys = &KeyMeta{
+			Left:   make([]byte, common.HashLength),
+			Right:  make([]byte, common.HashLength),
+			Parent: make([]byte, common.HashLength),
+		}
+	}
+	copy(item.Keys.Left, bytes[0:common.HashLength])
+	copy(item.Keys.Right, bytes[common.HashLength:2*common.HashLength])
+	copy(item.Keys.Parent, bytes[2*common.HashLength:start])
+	item.Color = Byte2bool(bytes[start])
+	start++
+	// item.Deleted = byte2bool(bytes[start])
+	// start++
+	if start < totalLength {
+		item.Value = make([]byte, totalLength-start)
+		copy(item.Value, bytes[start:])
+	}
+
+	// fmt.Printf("Item key : %#v\n", item.Keys)
+
+	return nil
 }
 
 // NewOrderBook : return new order book
@@ -40,13 +116,21 @@ func NewOrderBook(datadir string) *OrderBook {
 	// we can implement using only one DB to faciliate cache engine
 	// so that we use a big.Int number to seperate domain of the keys
 	// like this keccak("orderBook") + key
-	orderBookPath := path.Join(datadir, "orderBook")
-	bidsPath := path.Join(datadir, "bids")
-	asksPath := path.Join(datadir, "asks")
-	bids := NewOrderTree(bidsPath)
-	asks := NewOrderTree(asksPath)
+	orderBookPath := path.Join(datadir, "orderbook")
+	db := NewBatchDatabase(orderBookPath, 0, 0)
 
-	db, _ := ethdb.NewLDBDatabase(orderBookPath, 0, 0)
+	// override Encode and Decode for better performance
+	db.EncodeToBytes = EncodeBytesItem
+	db.DecodeBytes = DecodeBytesItem
+
+	// do slot
+	key := crypto.Keccak256([]byte("orderbook"))
+	slot := new(big.Int).SetBytes(key)
+	bidsKey := crypto.Keccak256([]byte("bids"))
+	asksKey := crypto.Keccak256([]byte("asks"))
+
+	bids := NewOrderTree(db, bidsKey)
+	asks := NewOrderTree(db, asksKey)
 
 	item := &OrderBookItem{
 		NextOrderID: 0,
@@ -57,9 +141,11 @@ func NewOrderBook(datadir string) *OrderBook {
 		Bids: bids,
 		Asks: asks,
 		Item: item,
+		slot: slot,
+		Key:  key,
 	}
 
-	orderBook.Restore()
+	// orderBook.Restore()
 
 	// no need to update when there is no operation yet
 	orderBook.UpdateTime()
@@ -67,12 +153,16 @@ func NewOrderBook(datadir string) *OrderBook {
 	return orderBook
 }
 
+func (orderBook *OrderBook) SetDebug(debug bool) {
+	orderBook.db.Debug = debug
+}
+
 func (orderBook *OrderBook) Save() error {
 
 	orderBook.Asks.Save()
 	orderBook.Bids.Save()
 
-	orderBookBytes, _ := rlp.EncodeToBytes(orderBook.Item)
+	// orderBookBytes, _ := rlp.EncodeToBytes(orderBook.Item)
 
 	// batch.Put([]byte("asks"), asksBytes)
 	// batch.Put([]byte("bids"), bidsBytes)
@@ -80,7 +170,12 @@ func (orderBook *OrderBook) Save() error {
 
 	// commit
 	// return batch.Write()
-	return orderBook.db.Put([]byte("orderBook"), orderBookBytes)
+	return orderBook.db.Put(orderBook.Key, orderBook.Item)
+}
+
+// commit everything by trigger db.Commit, later we can map custom encode and decode based on item
+func (orderBook *OrderBook) Commit() error {
+	return orderBook.db.Commit()
 }
 
 func (orderBook *OrderBook) Restore() error {
@@ -95,10 +190,12 @@ func (orderBook *OrderBook) Restore() error {
 	orderBook.Asks.Restore()
 	orderBook.Bids.Restore()
 
-	orderBookBytes, err := orderBook.db.Get([]byte("orderBook"))
+	val, err := orderBook.db.Get(orderBook.Key, orderBook.Item)
 	if err == nil {
-		return rlp.DecodeBytes(orderBookBytes, orderBook.Item)
+		// 	// return rlp.DecodeBytes(orderBookBytes, orderBook.Item)
+		orderBook.Item = val.(*OrderBookItem)
 	}
+
 	return err
 }
 

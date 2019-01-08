@@ -7,6 +7,7 @@ import (
 
 func TestNewOrderTree(t *testing.T) {
 	orderTree := testOrderTree
+	// orderTree.Restore()
 
 	// fmt.Println(ToJSON(orderTree.Item))
 

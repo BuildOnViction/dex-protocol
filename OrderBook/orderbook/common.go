@@ -7,6 +7,33 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+type Comparator func(a, b []byte) int
+type EncodeToBytes func(interface{}) ([]byte, error)
+type DecodeBytes func([]byte, interface{}) error
+type FormatBytes func([]byte) string
+
+var EmptyKey = make([]byte, common.HashLength)
+
+const (
+	TrueByte  = byte(1)
+	FalseByte = byte(0)
+)
+
+func Bool2byte(bln bool) byte {
+	if bln == true {
+		return TrueByte
+	}
+
+	return FalseByte
+}
+
+func Byte2bool(b byte) bool {
+	if b == TrueByte {
+		return true
+	}
+	return false
+}
+
 // ToJSON : log json string
 func ToJSON(object interface{}, args ...string) string {
 	var str []byte

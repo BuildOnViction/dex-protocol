@@ -32,6 +32,7 @@ func TestNewOrderBook(t *testing.T) {
 
 func TestOrderBook(t *testing.T) {
 	orderBook := NewOrderBook(datadir)
+	orderBook.Restore()
 
 	limitOrders := make([]map[string]string, 0)
 
@@ -194,7 +195,20 @@ func TestOrderBook(t *testing.T) {
 	// t.Logf("Best ask List : %s", orderList.String(0))
 	// t.Log(orderBook.Asks.PriceTree)
 
-	t.Logf("\nOrderBook :%s", orderBook.String(0))
+	// orderBook.SetDebug(true)
+	orderBook.Commit()
 
+	t.Logf("\nOrderBook :%s", orderBook.String(0))
 	t.Logf("\nTrade :%s\nOrderInBook :%s", ToJSON(trades), ToJSON(orderInBook))
+
+	// orderBook.Restore()
+	// t.Logf("\nOrderBook :%s", orderBook.String(0))
+}
+
+func TestOrderBookRestore(t *testing.T) {
+	orderBook := NewOrderBook(datadir)
+	orderBook.SetDebug(true)
+
+	orderBook.Restore()
+	t.Logf("\nOrderBook :%s", orderBook.String(0))
 }

@@ -35,7 +35,7 @@ func getBig(value string) []byte {
 }
 
 func TestManipulateLevelDBTree(t *testing.T) {
-	tree := NewRedBlackTreeExtended(datadir)
+	tree := NewRedBlackTreeExtended(dbTest)
 
 	start := time.Now()
 	tree.Put(getBig("1"), []byte("a")) // 1->a (in order)
@@ -48,7 +48,7 @@ func TestManipulateLevelDBTree(t *testing.T) {
 
 	print(tree, t)
 
-	tree.Commit()
+	dbTest.Commit()
 	// Value for max key: e
 	// Value for min key: a
 	// RedBlackTree
@@ -71,7 +71,7 @@ func TestManipulateLevelDBTree(t *testing.T) {
 }
 
 func TestRestoreLevelDBTree(t *testing.T) {
-	tree := NewRedBlackTreeExtended(datadir)
+	tree := NewRedBlackTreeExtended(dbTest)
 
 	tree.SetRootKey(getBig("2"))
 

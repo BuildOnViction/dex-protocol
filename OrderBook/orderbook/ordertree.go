@@ -3,20 +3,9 @@ package orderbook
 import (
 	"fmt"
 	"math/big"
-	"path"
 	"strconv"
 	"strings"
-
 	// rbt "github.com/emirpasic/gods/trees/redblacktree"
-
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
-	lru "github.com/hashicorp/golang-lru"
-)
-
-const (
-	itemCacheLimit = 1024
 )
 
 type OrderTreeItem struct {
@@ -32,21 +21,24 @@ type OrderTree struct {
 	// PriceMap  map[string]*OrderList `json:"priceMap"`  // Dictionary containing price : OrderList object
 	// OrderMap  map[string]*Order     `json:"orderMap"`  // Dictionary containing order_id : Order object
 
-	OrderDB *ethdb.LDBDatabase // this is for order
+	orderDB *BatchDatabase // this is for order
+	slot    *big.Int
+	Key     []byte
+	Item    *OrderTreeItem
 
-	Item *OrderTreeItem
-
-	orderListCache *lru.Cache // Cache for the recent orderList
+	// orderListCache *lru.Cache // Cache for the recent orderList
 }
 
 // NewOrderTree create new order tree
-func NewOrderTree(datadir string) *OrderTree {
+func NewOrderTree(orderDB *BatchDatabase, key []byte) *OrderTree {
 	// create priceTree from db for order list
-	orderListDBPath := path.Join(datadir, "pricetree")
-	orderDBPath := path.Join(datadir, "order")
-	priceTree := NewRedBlackTreeExtended(orderListDBPath)
-	itemCache, _ := lru.New(itemCacheLimit)
-	orderDB, _ := ethdb.NewLDBDatabase(orderDBPath, 0, 0)
+	// orderListDBPath := path.Join(datadir, "pricetree")
+	// orderDBPath := path.Join(datadir, "order")
+	priceTree := NewRedBlackTreeExtended(orderDB)
+	// priceTree.Debug = orderDB.Debug
+
+	// itemCache, _ := lru.New(defaultCacheLimit)
+	// orderDB, _ := ethdb.NewLDBDatabase(orderDBPath, 0, 0)
 
 	item := &OrderTreeItem{
 		Volume:    Zero(),
@@ -54,53 +46,73 @@ func NewOrderTree(datadir string) *OrderTree {
 		Depth:     0,
 	}
 
+	slot := new(big.Int).SetBytes(key)
+
+	// we will need a lru for cache hit, and internal cache for orderbook db to do the batch update
 	orderTree := &OrderTree{
-		OrderDB:        orderDB,
-		Item:           item,
-		orderListCache: itemCache,
+		orderDB:   orderDB,
+		PriceTree: priceTree,
+		Key:       key,
+		slot:      slot,
+		Item:      item,
+		// orderListCache: itemCache,
 	}
 
 	// must restore from db first to make sure we get corrent information
-	orderTree.Restore()
+	// orderTree.Restore()
 	// then update PriceTree after restore the order tree
-	priceTree.SetRootKey(orderTree.Item.PriceTreeKey)
 
 	// update price tree
-	orderTree.PriceTree = priceTree
-
+	// orderTree.PriceTree = priceTree
+	// orderTree.Key = GetKeyFromBig(orderTree.slot)
 	return orderTree
 }
 
 // we use hash as offset to store order tree information
-var OrderTreeKey = crypto.Keccak256([]byte("ordertree"))
+// var OrderTreeKey = crypto.Keccak256([]byte("ordertree"))
+
+// func (orderTree *OrderTree) DB() *BatchDatabase {
+// 	return orderTree.orderDB
+// }
 
 func (orderTree *OrderTree) Save() error {
 	// commit tree changes
-	orderTree.PriceTree.Commit()
+	// orderTree.PriceTree.Commit()
 
 	// update tree meta information
 	priceTreeRoot := orderTree.PriceTree.Root()
 	if priceTreeRoot != nil {
 		orderTree.Item.PriceTreeKey = priceTreeRoot.Key
 	}
-	ordertreeBytes, err := rlp.EncodeToBytes(orderTree.Item)
+
+	// using rlp.EncodeToBytes as underlying encode method
+	// fmt.Printf("ordertree bytes save : %v\n", orderTree.Key)
+	return orderTree.orderDB.Put(orderTree.Key, orderTree.Item)
+	// ordertreeBytes, err := rlp.EncodeToBytes(orderTree.Item)
 	// ordertreeBytes, err := json.Marshal(orderTree.Item)
 	// fmt.Printf("ordertree bytes : %s, %x\n", ToJSON(orderTree.Item), ordertreeBytes)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return err
+	// }
 
-	return orderTree.OrderDB.Put(OrderTreeKey, ordertreeBytes)
+	// return orderTree.OrderDB.Put(OrderTreeKey, ordertreeBytes)
 }
 
 func (orderTree *OrderTree) Restore() error {
-	ordertreeBytes, err := orderTree.OrderDB.Get(OrderTreeKey)
-	// fmt.Printf("ordertree bytes : %x\n", ordertreeBytes)
+	// val.(*OrderTreeItem)
+	val, err := orderTree.orderDB.Get(orderTree.Key, orderTree.Item)
+
+	// fmt.Printf("ordertree bytes get : %v\n", orderTree.Key)
 	if err == nil {
-		return rlp.DecodeBytes(ordertreeBytes, orderTree.Item)
+		// return rlp.DecodeBytes(ordertreeBytes, orderTree.Item)
 		// return json.Unmarshal(ordertreeBytes, orderTree.Item)
+		orderTree.Item = val.(*OrderTreeItem)
+
+		// update root key for pricetree
+		orderTree.PriceTree.SetRootKey(orderTree.Item.PriceTreeKey)
 	}
+
 	return err
 }
 
@@ -111,11 +123,16 @@ func (orderTree *OrderTree) String(startDepth int) string {
 		orderTree.Item.Volume, tabs, orderTree.Item.NumOrders, tabs, orderTree.Item.Depth, tabs)
 }
 
+func (orderTree *OrderTree) Length() uint64 {
+	return orderTree.Item.NumOrders
+}
+
 // Check the order database is emtpy or not
 func (orderTree *OrderTree) NotEmpty() bool {
 	// return len(orderTree.OrderMap)
-	iter := orderTree.OrderDB.NewIterator()
-	return iter.First()
+	// iter := orderTree.OrderDB.NewIterator()
+	// return iter.First()
+	return orderTree.Item.NumOrders > 0
 }
 
 func (orderTree *OrderTree) GetOrder(key []byte, price *big.Int) *Order {
@@ -124,6 +141,7 @@ func (orderTree *OrderTree) GetOrder(key []byte, price *big.Int) *Order {
 		return nil
 	}
 
+	// we can use orderID incremental way, so we just need a big slot from price of order tree
 	return orderList.GetOrder(key)
 	// bytes, err := orderTree.OrderDB.Get(key)
 	// if err != nil {
@@ -144,10 +162,17 @@ func (orderTree *OrderTree) GetOrder(key []byte, price *big.Int) *Order {
 // 	return orderTree.OrderMap[orderID]
 // }
 
+func (orderTree *OrderTree) getSlotFromPrice(price *big.Int) *big.Int {
+	// orderListKey, _ := price.GobEncode()
+	return Add(orderTree.slot, price)
+
+}
+
 // next time this price will be big.Int
 func (orderTree *OrderTree) getKeyFromPrice(price *big.Int) []byte {
 	// orderListKey, _ := price.GobEncode()
-	return GetKeyFromBig(price)
+	orderListKey := orderTree.getSlotFromPrice(price)
+	return GetKeyFromBig(orderListKey)
 }
 
 // PriceList : get the price list from the price map using price as key
@@ -155,14 +180,15 @@ func (orderTree *OrderTree) PriceList(price *big.Int) *OrderList {
 	// this will be wrong, we must return existing orderList
 	// orderList := NewOrderList(price, orderTree)
 
-	cacheKey := price.String()
-	// cache hit
-	if cached, ok := orderTree.orderListCache.Get(cacheKey); ok {
-		return cached.(*OrderList)
-	}
+	// cache is seperated for each ordertree, so no need to add the slot
+	// cacheKey := price.String()
+	// // cache hit
+	// if cached, ok := orderTree.orderListCache.Get(cacheKey); ok {
+	// 	fmt.Println("Cache hit")
+	// 	return cached.(*OrderList)
+	// }
 
 	key := orderTree.getKeyFromPrice(price)
-
 	bytes, found := orderTree.PriceTree.Get(key)
 
 	if found {
@@ -172,8 +198,8 @@ func (orderTree *OrderTree) PriceList(price *big.Int) *OrderList {
 
 		orderList := orderTree.decodeOrderList(bytes)
 
-		// update cache
-		orderTree.orderListCache.Add(cacheKey, orderList)
+		// // update cache
+		// orderTree.orderListCache.Add(cacheKey, orderList)
 
 		return orderList
 	}
@@ -193,10 +219,26 @@ func (orderTree *OrderTree) CreatePrice(price *big.Int) *OrderList {
 	// should use batch to optimize the performance
 	orderTree.Save()
 
-	// update cache
-	orderTree.orderListCache.Add(price.String(), newList)
+	// // update cache
+	// orderTree.orderListCache.Add(price.String(), newList)
 
 	return newList
+}
+
+func (orderTree *OrderTree) SaveOrderList(orderList *OrderList) error {
+	value, err := orderTree.orderDB.EncodeToBytes(orderList.Item)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	// we use orderlist db file seperated from order
+	// orderList.db.Put(orderList.Key, value)
+	if orderTree.orderDB.Debug {
+		fmt.Printf("Save orderlist key %x, value :%x\n", orderList.Key, value)
+	}
+	// fmt.Println("AFTER UPDATE", orderList.String(0))
+	return orderTree.PriceTree.Put(orderList.Key, value)
+
 }
 
 // RemovePrice : delete a list by price
@@ -206,8 +248,8 @@ func (orderTree *OrderTree) RemovePrice(price *big.Int) {
 		orderListKey := orderTree.getKeyFromPrice(price)
 		orderTree.PriceTree.Remove(orderListKey)
 
-		// also remove from cache to trigger cache miss
-		orderTree.orderListCache.Remove(price.String())
+		// // also remove from cache to trigger cache miss
+		// orderTree.orderListCache.Remove(price.String())
 
 		// should use batch to optimize the performance
 		orderTree.Save()
@@ -218,13 +260,16 @@ func (orderTree *OrderTree) RemovePrice(price *big.Int) {
 func (orderTree *OrderTree) PriceExist(price *big.Int) bool {
 
 	// cache hit
-	if orderTree.orderListCache.Contains(price.String()) {
-		return true
-	}
+	// if orderTree.orderListCache.Contains(price.String()) {
+	// 	return true
+	// }
 
 	orderListKey := orderTree.getKeyFromPrice(price)
 
-	_, found := orderTree.PriceTree.Get(orderListKey)
+	found, _ := orderTree.PriceTree.Has(orderListKey)
+	// if found != true {
+	// 	fmt.Println("FOUND", hex.EncodeToString(orderListKey), price.String())
+	// }
 	// fmt.Printf("Key :%x, %s, %x", orderListKey, price.String(), value)
 	return found
 }
@@ -427,7 +472,8 @@ func (orderTree *OrderTree) RemoveOrder(order *Order) (*OrderList, error) {
 
 func (orderTree *OrderTree) getOrderListItem(bytes []byte) *OrderListItem {
 	item := &OrderListItem{}
-	rlp.DecodeBytes(bytes, item)
+	// rlp.DecodeBytes(bytes, item)
+	orderTree.orderDB.DecodeBytes(bytes, item)
 	return item
 }
 
@@ -435,8 +481,8 @@ func (orderTree *OrderTree) decodeOrderList(bytes []byte) *OrderList {
 	item := orderTree.getOrderListItem(bytes)
 	orderList := NewOrderListWithItem(item, orderTree)
 
-	// update cache
-	orderTree.orderListCache.Add(item.Price.String(), orderList)
+	// // update cache
+	// orderTree.orderListCache.Add(item.Price.String(), orderList)
 
 	return orderList
 	// return &OrderList{
