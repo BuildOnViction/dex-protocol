@@ -20,12 +20,17 @@ const (
 	ORDERTYPE_LIMIT  = "limit"
 )
 
+// we use a big number as segment for storing order, order list from order tree slot.
+// as sequential id
+const segment = 1
+
 var askSlotKey = common.StringToHash(ASK).Bytes()
 var bidSlotKey = common.StringToHash(BID).Bytes()
 
 type OrderBookItem struct {
 	Timestamp   uint64 `json:"time"`
 	NextOrderID uint64 `json:"nextOrderID"`
+	Name        string `json:"name"`
 }
 
 // OrderBook : list of orders
@@ -48,20 +53,25 @@ func NewOrderBook(name string, db *BatchDatabase) *OrderBook {
 	// orderBookPath := path.Join(datadir, "orderbook")
 	// db := NewBatchDatabase(orderBookPath, 0, 0)
 
+	item := &OrderBookItem{
+		NextOrderID: 0,
+		Name:        strings.ToLower(name),
+	}
+
 	// do slot with hash to prevent collision
 
 	// we convert to lower case, so even with name as contract address, it is still correct
 	// without converting back from hex to bytes
-	key := crypto.Keccak256([]byte(strings.ToLower(name)))
+	key := crypto.Keccak256([]byte(item.Name))
 	slot := new(big.Int).SetBytes(key)
 
 	// hash ( orderBookKey . orderTreeKey )
-	bidsKey := crypto.Keccak256(key, bidSlotKey)
-	asksKey := crypto.Keccak256(key, askSlotKey)
+	// bidsKey := crypto.Keccak256(key, bidSlotKey)
+	// asksKey := crypto.Keccak256(key, askSlotKey)
 
-	item := &OrderBookItem{
-		NextOrderID: 0,
-	}
+	// we just increase the segment at the most byte to prevent conflict
+	bidsKey := GetSegmentHash(key, 1)
+	asksKey := GetSegmentHash(key, 2)
 
 	orderBook := &OrderBook{
 		db:   db,
@@ -139,9 +149,9 @@ func (orderBook *OrderBook) Restore() error {
 
 func (orderBook *OrderBook) String(startDepth int) string {
 	tabs := strings.Repeat("\t", startDepth)
-	return fmt.Sprintf("{\n\t%sBids: %s\n\t%sAsks: %s\n\t%sTimestamp: %d\n\t%sNextOrderID: %d\n%s}\n",
-		tabs, orderBook.Bids.String(startDepth+1), tabs, orderBook.Asks.String(startDepth+1), tabs,
-		orderBook.Item.Timestamp, tabs, orderBook.Item.NextOrderID, tabs)
+	return fmt.Sprintf("{\n\t%sBids: %s\n\t%sAsks: %s\n\t%sName: %s\n\t%sTimestamp: %d\n\t%sNextOrderID: %d\n%s}\n",
+		tabs, orderBook.Bids.String(startDepth+1), tabs, orderBook.Asks.String(startDepth+1),
+		tabs, orderBook.Item.Name, tabs, orderBook.Item.Timestamp, tabs, orderBook.Item.NextOrderID, tabs)
 }
 
 // UpdateTime : update time for order book

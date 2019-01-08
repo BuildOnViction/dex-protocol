@@ -26,6 +26,13 @@ func EmptyKey() []byte {
 	return key
 }
 
+func GetSegmentHash(key []byte, segment uint8) []byte {
+	segmentKey := make([]byte, len(key))
+	copy(segmentKey, key)
+	segmentKey[0] = byte(uint8(segmentKey[0]) + segment)
+	return segmentKey
+}
+
 func Bool2byte(bln bool) byte {
 	if bln == true {
 		return TrueByte

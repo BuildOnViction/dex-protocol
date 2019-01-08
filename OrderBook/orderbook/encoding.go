@@ -296,12 +296,18 @@ func EncodeBytesOrderBookItem(item *OrderBookItem) ([]byte, error) {
 	// try with zero
 	start := 0
 	totalLength := start + 2*8 // Timestamp and NextOrderID
+	totalLength += len(item.Name)
 
 	returnBytes := make([]byte, totalLength)
 
 	binary.BigEndian.PutUint64(returnBytes[start:start+8], item.Timestamp)
 	start += 8
 	binary.BigEndian.PutUint64(returnBytes[start:start+8], item.NextOrderID)
+	start += 8
+
+	if start < totalLength {
+		copy(returnBytes[start:], item.Name)
+	}
 
 	return returnBytes, nil
 }
@@ -314,9 +320,11 @@ func DecodeBytesOrderBookItem(bytes []byte, item *OrderBookItem) error {
 	item.Timestamp = binary.BigEndian.Uint64(bytes[start : start+8])
 	start += 8
 
-	// may have wrong format, just get next 8 bytes
-	if start+8 <= totalLength {
-		item.NextOrderID = binary.BigEndian.Uint64(bytes[start : start+8])
+	item.NextOrderID = binary.BigEndian.Uint64(bytes[start : start+8])
+	start += 8
+
+	if start < totalLength {
+		item.Name = string(bytes[start:])
 	}
 
 	// fmt.Printf("Item : %d, %d\n", start+8, totalLength)
