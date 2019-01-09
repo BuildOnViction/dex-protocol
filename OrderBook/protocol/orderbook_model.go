@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strings"
 
+	demo "github.com/tomochain/orderbook/common"
 	"github.com/tomochain/orderbook/orderbook"
 )
 
@@ -121,6 +122,7 @@ func (m *OrderbookModel) getAndCreateIfNotExisted(pairName string) (*orderbook.O
 		ob := orderbook.NewOrderBook(name, m.db)
 		if ob != nil {
 			ob.Restore()
+			demo.LogInfo("\nOrderBook :%s", ob.String(0))
 			m.Orderbooks[name] = ob
 		}
 	}
