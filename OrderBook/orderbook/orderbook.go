@@ -186,16 +186,17 @@ func (orderBook *OrderBook) processMarketOrder(quote map[string]string, verbose 
 	quantityToTrade := ToBigInt(quote["quantity"])
 	side := quote["side"]
 	var newTrades []map[string]string
-
+	// speedup the comparison, do not assign because it is pointer
+	zero := Zero()
 	if side == BID {
-		for quantityToTrade.Cmp(Zero()) > 0 && orderBook.Asks.NotEmpty() {
+		for quantityToTrade.Cmp(zero) > 0 && orderBook.Asks.NotEmpty() {
 			bestPriceAsks := orderBook.Asks.MinPriceList()
 			quantityToTrade, newTrades = orderBook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 		}
 		// } else if side == ASK {
 	} else {
-		for quantityToTrade.Cmp(Zero()) > 0 && orderBook.Bids.NotEmpty() {
+		for quantityToTrade.Cmp(zero) > 0 && orderBook.Bids.NotEmpty() {
 			bestPriceBids := orderBook.Bids.MaxPriceList()
 			quantityToTrade, newTrades = orderBook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
@@ -214,17 +215,19 @@ func (orderBook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 
 	var newTrades []map[string]string
 	var orderInBook map[string]string
+	// speedup the comparison, do not assign because it is pointer
+	zero := Zero()
 
 	if side == BID {
 		minPrice := orderBook.Asks.MinPrice()
-		for quantityToTrade.Cmp(Zero()) > 0 && orderBook.Asks.NotEmpty() && price.Cmp(minPrice) >= 0 {
+		for quantityToTrade.Cmp(zero) > 0 && orderBook.Asks.NotEmpty() && price.Cmp(minPrice) >= 0 {
 			bestPriceAsks := orderBook.Asks.MinPriceList()
 			quantityToTrade, newTrades = orderBook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 			minPrice = orderBook.Asks.MinPrice()
 		}
 
-		if quantityToTrade.Cmp(Zero()) > 0 {
+		if quantityToTrade.Cmp(zero) > 0 {
 			quote["order_id"] = strconv.FormatUint(orderBook.Item.NextOrderID, 10)
 			quote["quantity"] = quantityToTrade.String()
 			orderBook.Bids.InsertOrder(quote)
@@ -234,14 +237,14 @@ func (orderBook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 		// } else if side == ASK {
 	} else {
 		maxPrice := orderBook.Bids.MaxPrice()
-		for quantityToTrade.Cmp(Zero()) > 0 && orderBook.Bids.NotEmpty() && price.Cmp(maxPrice) <= 0 {
+		for quantityToTrade.Cmp(zero) > 0 && orderBook.Bids.NotEmpty() && price.Cmp(maxPrice) <= 0 {
 			bestPriceBids := orderBook.Bids.MaxPriceList()
 			quantityToTrade, newTrades = orderBook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 			maxPrice = orderBook.Bids.MaxPrice()
 		}
 
-		if quantityToTrade.Cmp(Zero()) > 0 {
+		if quantityToTrade.Cmp(zero) > 0 {
 			quote["order_id"] = strconv.FormatUint(orderBook.Item.NextOrderID, 10)
 			quote["quantity"] = quantityToTrade.String()
 			orderBook.Asks.InsertOrder(quote)
@@ -279,9 +282,11 @@ func (orderBook *OrderBook) processOrderList(side string, orderList *OrderList, 
 	quantityToTrade := CloneBigInt(quantityStillToTrade)
 	// quantityToTrade := quantityStillToTrade
 	var trades []map[string]string
+	// speedup the comparison, do not assign because it is pointer
+	zero := Zero()
 	// var watchDog = 0
 	// fmt.Printf("CMP problem :%t - %t\n", quantityToTrade.Cmp(Zero()) > 0, IsGreaterThan(quantityToTrade, Zero()))
-	for orderList.Item.Length > 0 && IsStrictlyGreaterThan(quantityToTrade, Zero()) {
+	for orderList.Item.Length > 0 && quantityToTrade.Cmp(zero) > 0 {
 
 		headOrder := orderList.GetOrder(orderList.Item.HeadOrder)
 		// fmt.Printf("Head :%s ,%s\n", new(big.Int).SetBytes(orderList.Item.HeadOrder), orderBook.Asks.MinPriceList().String(0))
