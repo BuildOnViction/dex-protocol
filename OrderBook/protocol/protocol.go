@@ -12,8 +12,6 @@ import (
 )
 
 var (
-	// using the protocols abstraction, message structures are registered and their message codes handled automatically
-
 	OrderbookProtocol = &protocols.Spec{
 		Name:       demo.FooProtocolName,
 		Version:    demo.FooProtocolVersion,
@@ -22,11 +20,8 @@ var (
 			&OrderbookHandshake{}, &OrderbookMsg{},
 		},
 	}
-
-	// OrderbookTopic = pss.ProtocolTopic(OrderbookProtocol)
 )
 
-// OrderbookMsg : sort fields by ASC, can use map directly, or type that rlpx supports, such as uint(must >0)
 type OrderbookMsg struct {
 	PairName  string
 	ID        string

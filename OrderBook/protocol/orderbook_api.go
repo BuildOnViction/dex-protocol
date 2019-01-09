@@ -93,12 +93,3 @@ func (api *OrderbookAPI) GetOrder(pairName, orderID string) map[string]string {
 	}
 	return result
 }
-
-// func (api *OrderbookAPI) UpdateOrders(coin string, signerAddress string, hexData, hexSignature string, time uint64, level uint8) error {
-
-// 	epoch := lookup.Epoch{
-// 		Time:  time,
-// 		Level: level,
-// 	}
-// 	return api.Engine.UpdateData(coin, signerAddress, epoch, hexData, hexSignature)
-// }
