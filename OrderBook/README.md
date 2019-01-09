@@ -8,3 +8,6 @@ Assume you are in root folder
 Node1: `yarn node1 -mining true`  
 Node2: `yarn node2 -mining true`  
 Backend: `yarn backend`
+
+**DEMO**  
+![demo](./sync.png)
