@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	en "github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+
+	// en "github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -37,12 +39,12 @@ var (
 // it must implement the node.Service interface
 type FooService struct {
 	pongcount int
-	pingC     map[en.ID]chan struct{}
+	pingC     map[discover.NodeID]chan struct{}
 }
 
 func NewFooService() *FooService {
 	return &FooService{
-		pingC: make(map[en.ID]chan struct{}),
+		pingC: make(map[discover.NodeID]chan struct{}),
 	}
 }
 
@@ -153,10 +155,10 @@ func (self *FooService) Stop() error {
 type FooAPI struct {
 	running   bool
 	pongcount *int
-	pingC     map[en.ID]chan struct{}
+	pingC     map[discover.NodeID]chan struct{}
 }
 
-func NewFooAPI(pingC map[en.ID]chan struct{}, pongcount *int) *FooAPI {
+func NewFooAPI(pingC map[discover.NodeID]chan struct{}, pongcount *int) *FooAPI {
 	return &FooAPI{
 		running:   true,
 		pingC:     pingC,
@@ -169,7 +171,7 @@ func (api *FooAPI) Increment() {
 }
 
 // invoke a single ping
-func (api *FooAPI) Ping(id en.ID) error {
+func (api *FooAPI) Ping(id discover.NodeID) error {
 	if api.running {
 		api.pingC[id] <- struct{}{}
 	}
@@ -177,7 +179,7 @@ func (api *FooAPI) Ping(id en.ID) error {
 }
 
 // quit the ping protocol
-func (api *FooAPI) Quit(id en.ID) error {
+func (api *FooAPI) Quit(id discover.NodeID) error {
 	Log.Debug("quitting API", "peer", id)
 	if api.pingC[id] == nil {
 		return fmt.Errorf("unknown peer")

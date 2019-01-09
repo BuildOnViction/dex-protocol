@@ -6,19 +6,15 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/manifoldco/promptui"
-	"github.com/ethereum/go-ethereum/swarm/storage/feed"
-	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+
 	demo "github.com/tomochain/orderbook/common"
-	"github.com/tomochain/orderbook/protocol"
 	"github.com/tomochain/orderbook/terminal"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -79,12 +75,12 @@ func initPrompt() {
 	// init prompt commands
 	commands = []terminal.Command{
 		{
-			Name: "getOrders",
+			Name: "getOrder",
 			Arguments: []terminal.Argument{
-				{Name: "coin", Value: "Tomo"},
-				{Name: "signerAddress", Value: "0x28074f8d0fd78629cd59290cac185611a8d60109"},
+				{Name: "pairName", Value: "TOMO/WETH"},
+				{Name: "orderID", Value: "1"},
 			},
-			Description: "Get the order from the swarm storgae",
+			Description: "Get the order from the orderbook storgae",
 		},
 		{
 			Name: "updatePort",
@@ -94,51 +90,57 @@ func initPrompt() {
 			Description: "Update the websocket port to call RPC",
 		},
 		// 0x is only for address, data must not be prepend with this
+		// {
+		// 	Name: "updateOrders",
+		// 	Arguments: []terminal.Argument{
+		// 		{Name: "coin", Value: "Tomo"},
+		// 		{Name: "signerAddress", Value: "0x28074f8d0fd78629cd59290cac185611a8d60109"},
+		// 		{Name: "data", Remember: true, Value: "dedd845bb5f00c856c696d69748361736b8231308331303084546f6d6f3231"},
+		// 		{Name: "level", Value: "25"},
+		// 		{Name: "time", Value: "15414102790"},
+		// 		{Name: "signature", Hide: func(results map[string]string, thisArgument *terminal.Argument) bool {
+		// 			// ignore this argument when order type is market
+		// 			// topic, _ := feed.NewTopic("Token", []byte(results["coin"]))
+		// 			// request := new(feed.Request)
+
+		// 			// get the current time
+		// 			// level, _ := strconv.ParseUint(results["level"], 10, 8)
+		// 			// time, _ := strconv.ParseUint(results["time"], 10, 64)
+		// 			// request.Epoch = lookup.Epoch{
+		// 			// 	Time:  time,
+		// 			// 	Level: uint8(level),
+		// 			// }
+		// 			// data := common.Hex2Bytes(results["data"])
+		// 			// request.Feed.Topic = topic
+		// 			// request.Header.Version = 0
+		// 			// request.Feed.User = common.HexToAddress("0x28074f8D0fD78629CD59290Cac185611a8d60109")
+		// 			// request.SetData(data)
+		// 			// digest, _ := request.GetDigest()
+
+		// 			// keyBytes := common.Hex2Bytes("3411b45169aa5a8312e51357db68621031020dcf46011d7431db1bbb6d3922ce")
+		// 			// privkey, _ := crypto.ToECDSA(keyBytes)
+		// 			// signer := feed.NewGenericSigner(privkey)
+		// 			// signature, _ := signer.Sign(digest)
+
+		// 			// thisArgument.Value = fmt.Sprintf("%0x", signature)
+
+		// 			return false
+		// 		}, Remember: true, Value: "fe1a570e96e96e8ab2604451cb518ecab295cc743db6f006c9d14de0557a8b420fda798f0f7eba876dfe29073678c57384375dfdf51a33233d6bc61b337f69ff1b"},
+		// 	},
+		// 	Description: "Get the order from the swarm storgae",
+		// },
 		{
-			Name: "updateOrders",
+			Name: "getBestAskList",
 			Arguments: []terminal.Argument{
-				{Name: "coin", Value: "Tomo"},
-				{Name: "signerAddress", Value: "0x28074f8d0fd78629cd59290cac185611a8d60109"},
-				{Name: "data", Remember: true, Value: "dedd845bb5f00c856c696d69748361736b8231308331303084546f6d6f3231"},
-				{Name: "level", Value: "25"},
-				{Name: "time", Value: "15414102790"},
-				{Name: "signature", Hide: func(results map[string]string, thisArgument *terminal.Argument) bool {
-					// ignore this argument when order type is market
-					topic, _ := feed.NewTopic("Token", []byte(results["coin"]))
-					request := new(feed.Request)
-
-					// get the current time
-					level, _ := strconv.ParseUint(results["level"], 10, 8)
-					time, _ := strconv.ParseUint(results["time"], 10, 64)
-					request.Epoch = lookup.Epoch{
-						Time:  time,
-						Level: uint8(level),
-					}
-					data := common.Hex2Bytes(results["data"])
-					request.Feed.Topic = topic
-					request.Header.Version = 0
-					request.Feed.User = common.HexToAddress("0x28074f8D0fD78629CD59290Cac185611a8d60109")
-					request.SetData(data)
-					digest, _ := request.GetDigest()
-
-					keyBytes := common.Hex2Bytes("3411b45169aa5a8312e51357db68621031020dcf46011d7431db1bbb6d3922ce")
-					privkey, _ := crypto.ToECDSA(keyBytes)
-					signer := feed.NewGenericSigner(privkey)
-					signature, _ := signer.Sign(digest)
-
-					thisArgument.Value = fmt.Sprintf("%0x", signature)
-
-					return false
-				}, Remember: true, Value: "fe1a570e96e96e8ab2604451cb518ecab295cc743db6f006c9d14de0557a8b420fda798f0f7eba876dfe29073678c57384375dfdf51a33233d6bc61b337f69ff1b"},
+				{Name: "pairName", Value: "TOMO/WETH"},
 			},
-			Description: "Get the order from the swarm storgae",
-		},
-		{
-			Name:        "getBestAskList",
 			Description: "Get best ask list",
 		},
 		{
-			Name:        "getBestBidList",
+			Name: "getBestBidList",
+			Arguments: []terminal.Argument{
+				{Name: "pairName", Value: "TOMO/WETH"},
+			},
 			Description: "Get best bid list",
 		},
 		{
@@ -195,14 +197,14 @@ func Start() error {
 	// start serving
 	go func() {
 		var wsPort = "18543"
-		var signerAddress = "0x28074f8d0fd78629cd59290cac185611a8d60109"
+		// var signerAddress = "0x28074f8d0fd78629cd59290cac185611a8d60109"
 		for {
 			// loop command
 			commands[1].Arguments[0].Value = wsPort
-			if wsPort != "18543" {
-				signerAddress = "0x6e6BB166F420DDd682cAEbf55dAfBaFda74f2c9c"
-			}
-			commands[0].Arguments[1].Value = signerAddress
+			// if wsPort != "18543" {
+			// 	signerAddress = "0x6e6BB166F420DDd682cAEbf55dAfBaFda74f2c9c"
+			// }
+			// commands[0].Arguments[1].Value = signerAddress
 
 			selected, _, err := prompt.Run()
 
@@ -238,25 +240,23 @@ func Start() error {
 			case "updatePort":
 				demo.LogInfo("-> Update", "wsPort", results["wsPort"])
 				wsPort = results["wsPort"]
-			case "getOrders":
-				demo.LogInfo("-> Get orders", "coin", results["coin"], "from", results["signerAddress"])
+			case "getOrder":
+				demo.LogInfo("-> Get orders", "pairName", results["pairName"], "orderID", results["orderID"])
 				// put message on channel
-				var orderResult []protocol.OrderbookMsg
-				err := rpcClient.Call(&orderResult, "orderbook_getOrders", results["coin"], results["signerAddress"])
-				logResult(orderResult, err)
-			case "updateOrders":
-				level, _ := strconv.ParseUint(results["level"], 10, 8)
-				time, _ := strconv.ParseUint(results["time"], 10, 64)
-				// put message on channel
-				var result interface{}
-				err := rpcClient.Call(&result, "orderbook_updateOrders", results["coin"], results["signerAddress"], results["data"], results["signature"], time, uint8(level))
-				logResult(result, err)
+				callRPC(result, "orderbook_getOrder", results["pairName"], results["orderID"])
+			// case "updateOrder":
+			// level, _ := strconv.ParseUint(results["level"], 10, 8)
+			// time, _ := strconv.ParseUint(results["time"], 10, 64)
+			// // put message on channel
+			// var result interface{}
+			// err := rpcClient.Call(&result, "orderbook_updateOrders", results["coin"], results["signerAddress"], results["data"], results["signature"], time, uint8(level))
+			// logResult(result, err)
 			case "getBestAskList":
 				demo.LogInfo("-> Best ask list:")
-				callRPC(result, "orderbook_getBestAskList")
+				callRPC(result, "orderbook_getBestAskList", results["pairName"])
 			case "getBestBidList":
 				demo.LogInfo("-> Best bid list:")
-				callRPC(result, "orderbook_getBestBidList")
+				callRPC(result, "orderbook_getBestBidList", results["pairName"])
 			default:
 				demo.LogInfo(fmt.Sprintf("-> Unknown command: %s\n", command.Name))
 			}

@@ -15,7 +15,7 @@ type FormatBytes func([]byte) string
 const (
 	TrueByte  = byte(1)
 	FalseByte = byte(0)
-
+	decimals  = 18
 	// // maximum 18 bytes for big.Int like quantity, price, volume
 	// Decimals = 18
 )
@@ -59,6 +59,24 @@ func ToJSON(object interface{}, args ...string) string {
 		str, _ = json.Marshal(object)
 	}
 	return string(str)
+}
+
+func GetKeyFromUint64(key uint64) []byte {
+	return GetKeyFromBig(big.NewInt(int64(key)))
+}
+
+func GetKeyFromString(key string) []byte {
+	var bigInt *big.Int
+	// this is too big, maybe hash string
+	if len(key) >= 2*common.AddressLength {
+		// if common.IsHexAddress(key) {
+		// 	return common.HexToHash().Bytes()
+		// }
+		bigInt = new(big.Int).SetBytes([]byte(key))
+	} else {
+		bigInt, _ = new(big.Int).SetString(key, 10)
+	}
+	return GetKeyFromBig(bigInt)
 }
 
 func GetKeyFromBig(key *big.Int) []byte {

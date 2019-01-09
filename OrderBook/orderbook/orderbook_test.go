@@ -212,4 +212,9 @@ func TestOrderBookRestore(t *testing.T) {
 
 	orderBook.Restore()
 	t.Logf("\nOrderBook :%s", orderBook.String(0))
+
+	key := GetKeyFromString("10")
+	order := orderBook.GetOrder(key)
+
+	t.Logf("\nOrder : %s", order)
 }

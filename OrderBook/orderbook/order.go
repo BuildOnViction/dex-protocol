@@ -39,7 +39,7 @@ type Order struct {
 
 func (order *Order) String() string {
 
-	return fmt.Sprintf("orderID : %x, price: %s, quantity :%s, tradeID: %s",
+	return fmt.Sprintf("orderID : %s, price: %s, quantity :%s, tradeID: %s",
 		new(big.Int).SetBytes(order.Key), order.Item.Price, order.Item.Quantity, order.Item.TradeID)
 }
 

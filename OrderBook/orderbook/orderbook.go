@@ -143,6 +143,38 @@ func (orderBook *OrderBook) Restore() error {
 	return err
 }
 
+func (orderBook *OrderBook) GetOrderIDFromBook(key []byte) uint64 {
+	orderSlot := new(big.Int).SetBytes(key)
+	return Sub(orderSlot, orderBook.slot).Uint64()
+}
+
+func (orderBook *OrderBook) GetOrderIDFromKey(key []byte) []byte {
+	orderSlot := new(big.Int).SetBytes(key)
+	// fmt.Println("FAIL", key, orderList.slot)
+	return common.BigToHash(Add(orderBook.slot, orderSlot)).Bytes()
+}
+
+func (orderBook *OrderBook) GetOrder(key []byte) *Order {
+	if orderBook.db.IsEmptyKey(key) {
+		return nil
+	}
+	// orderID := key
+	storedKey := orderBook.GetOrderIDFromKey(key)
+	orderItem := &OrderItem{}
+	// var orderItem *OrderItem
+	val, err := orderBook.db.Get(storedKey, orderItem)
+	if err != nil {
+		fmt.Printf("Key not found :%x, %v\n", storedKey, err)
+		return nil
+	}
+
+	order := &Order{
+		Item: val.(*OrderItem),
+		Key:  key,
+	}
+	return order
+}
+
 // we need to store orderBook information as well
 // Volume    *big.Int `json:"volume"`    // Contains total quantity from all Orders in tree
 // 	NumOrders int             `json:"numOrders"` // Contains count of Orders in tree

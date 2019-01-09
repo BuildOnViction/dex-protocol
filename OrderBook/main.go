@@ -2,11 +2,11 @@
 package main
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path"
 	"runtime"
@@ -14,20 +14,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/p2p"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+
 	"github.com/manifoldco/promptui"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/swarm/pss"
 	demo "github.com/tomochain/orderbook/common"
 	"github.com/tomochain/orderbook/orderbook"
 	"github.com/tomochain/orderbook/protocol"
@@ -43,7 +41,7 @@ var (
 	app     = cli.NewApp()
 	privkey *ecdsa.PrivateKey
 
-	pssprotos = []*pss.Protocol{}
+	// pssprotos = []*pss.Protocol{}
 	// get the incoming message
 	msgC = make(chan interface{})
 
@@ -56,22 +54,22 @@ var (
 func initPrompt(privateKeyName string) {
 
 	// default value for node2 if using keystore1 and vice versa
-	var bzzaddr, nodeaddr, publickey string
+	var nodeaddr, publickey string
 	if privateKeyName == "keystore1" {
-		bzzaddr = "0x9984c9556ca87842c4ceb839518cd3648dc495d579f7af7f9ba49989bc207346"
+		// bzzaddr = "0x9984c9556ca87842c4ceb839518cd3648dc495d579f7af7f9ba49989bc207346"
 		nodeaddr = "enode://ce24c4f944a0a3614b691d839a6a89339d17abac3d69c0d24e806db45d1bdbe7afa53c02136e5ad952f43e6e7285cd3971e367d8789f4eb7306770f5af78755d@127.0.0.1:30101?discport=0"
 		publickey = "0x04ce24c4f944a0a3614b691d839a6a89339d17abac3d69c0d24e806db45d1bdbe7afa53c02136e5ad952f43e6e7285cd3971e367d8789f4eb7306770f5af78755d"
 	} else {
-		bzzaddr = "0x1bb065aa5e7997efc322a0223b62cd4ca218ce9f51c1e85bf9bd429f9265a3d7"
+		// bzzaddr = "0x1bb065aa5e7997efc322a0223b62cd4ca218ce9f51c1e85bf9bd429f9265a3d7"
 		nodeaddr = "enode://655b231711df566a1bbf8f62dd0abaad71a1baa2c4bc865cae1691431bff2d9185fb66c99b982e20fd0fd562ced2c1ced96bd3e1daba0235870dfce0663a3483@127.0.0.1:30100?discport=0"
 		publickey = "0x04655b231711df566a1bbf8f62dd0abaad71a1baa2c4bc865cae1691431bff2d9185fb66c99b982e20fd0fd562ced2c1ced96bd3e1daba0235870dfce0663a3483"
 	}
 
 	orderArguments := []terminal.Argument{
 		{Name: "id", Value: "1"},
-		{Name: "coin", Value: "Tomo"},
+		{Name: "pairName", Value: "TOMO/WETH"},
 		{Name: "type", Value: "limit"},
-		{Name: "side", Value: orderbook.ASK},
+		{Name: "side", Value: orderbook.Ask},
 		{Name: "quantity", Value: "10"},
 		{Name: "price", Value: "100", Hide: func(results map[string]string, thisArgument *terminal.Argument) bool {
 			// ignore this argument when order type is market
@@ -102,18 +100,18 @@ func initPrompt(privateKeyName string) {
 			},
 			Description: "Add node to seed",
 		},
-		{
-			Name: "updateBzz",
-			Arguments: []terminal.Argument{
-				{Name: "bzzaddr", Value: bzzaddr},
-				{Name: "publickey", Value: publickey},
-			},
-			Description: "Associate swarm topic with public key",
-		},
-		{
-			Name:        "bzzAddr",
-			Description: "Get Swarm address",
-		},
+		// {
+		// 	Name: "updateBzz",
+		// 	Arguments: []terminal.Argument{
+		// 		{Name: "bzzaddr", Value: bzzaddr},
+		// 		{Name: "publickey", Value: publickey},
+		// 	},
+		// 	Description: "Associate swarm topic with public key",
+		// },
+		// {
+		// 	Name:        "bzzAddr",
+		// 	Description: "Get Swarm address",
+		// },
 		{
 			Name:        "nodeAddr",
 			Description: "Get Node address",
@@ -140,13 +138,14 @@ func init() {
 				// init prompt
 				initPrompt(privateKeyName)
 				// must return export function
-				return Start(c.Int("p2pPort"), c.Int("httpPort"), c.Int("wsPort"), c.Int("bzzPort"), c.String("privateKey"), c.Bool("mining"))
+				return Start(c.Int("p2pPort"), c.Int("httpPort"), c.Int("wsPort"), c.String("name"),
+					c.String("privateKey"), c.Bool("mining"))
 			},
 			Flags: []cli.Flag{
 				cli.IntFlag{Name: "p2pPort, p1", Value: demo.P2pPort},
 				cli.IntFlag{Name: "httpPort, p2", Value: node.DefaultHTTPPort},
 				cli.IntFlag{Name: "wsPort, p3", Value: demo.WSDefaultPort},
-				cli.IntFlag{Name: "bzzPort, p4", Value: demo.BzzDefaultPort},
+				cli.StringFlag{Name: "name, n", Value: "node1"},
 				cli.StringFlag{Name: "privateKey, pvk"},
 				cli.BoolFlag{Name: "mining, m"},
 			},
@@ -164,7 +163,7 @@ func main() {
 
 }
 
-func Start(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey string, mining bool) error {
+func Start(p2pPort int, httpPort int, wsPort int, name string, privateKey string, mining bool) error {
 
 	// start the program at other rtine
 	_, fileName, _, _ := runtime.Caller(1)
@@ -173,10 +172,10 @@ func Start(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey string
 	genesisPath := path.Join(basePath, "genesis.json")
 	// privateKeyPath is from current folder where the file is running
 	demo.LogInfo("Connecting to pss websocket", "host", node.DefaultWSHost,
-		"p2pPort", p2pPort, "httpPort", httpPort, "wsPort", wsPort, "bzzPort",
-		bzzPort, "privateKey", privateKeyPath)
+		"p2pPort", p2pPort, "httpPort", httpPort, "wsPort", wsPort, "name",
+		name, "privateKey", privateKeyPath)
 
-	startup(p2pPort, httpPort, wsPort, bzzPort, privateKeyPath, genesisPath, mining)
+	startup(p2pPort, httpPort, wsPort, name, privateKeyPath, genesisPath, mining)
 
 	// process command
 	fmt.Println("---------------Welcome to Orderbook over swarm testing---------------------")
@@ -200,6 +199,8 @@ func Start(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey string
 			command := commands[selected]
 			if command.Name == "quit" {
 				demo.LogInfo("Server quiting...")
+				// commit changes to orderbook
+				orderbookModel.Commit()
 				endWaiter.Done()
 				thisNode.Stop()
 				quitC <- struct{}{}
@@ -214,20 +215,20 @@ func Start(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey string
 				demo.LogInfo("-> Add order", "payload", results)
 				// put message on channel
 				go processOrder(results)
-			case "publicKey":
-				demo.LogInfo(fmt.Sprintf("-> Public Key: %s\n", publicKey()))
-			case "updateBzz":
-				bzzaddr := results["bzzaddr"]
-				publickey := results["publickey"]
-				demo.LogInfo(fmt.Sprintf("-> Add bzz: %s\n", bzzaddr))
-				updateBzz(bzzaddr, publickey)
+			// case "publicKey":
+			// 	demo.LogInfo(fmt.Sprintf("-> Public Key: %s\n", publicKey()))
+			// case "updateBzz":
+			// 	bzzaddr := results["bzzaddr"]
+			// 	// publickey := results["publickey"]
+			// 	demo.LogInfo(fmt.Sprintf("-> Add bzz: %s\n", bzzaddr))
+			// 	// updateBzz(bzzaddr, publickey)
 			case "addNode":
 				nodeaddr := results["nodeaddr"]
 				publickey := results["publickey"]
 				demo.LogInfo(fmt.Sprintf("-> Add node: %s\n", nodeaddr))
 				addNode(nodeaddr, publickey)
-			case "bzzAddr":
-				demo.LogInfo(fmt.Sprintf("-> BZZ Address: %s\n", bzzAddr()))
+			// case "bzzAddr":
+			// 	demo.LogInfo(fmt.Sprintf("-> BZZ Address: %s\n", bzzAddr()))
 			case "nodeAddr":
 				demo.LogInfo(fmt.Sprintf("-> Node Address: %s\n", nodeAddr()))
 
@@ -250,17 +251,17 @@ func shutdown() error {
 	return nil
 }
 
-func updateBzz(bzzAddr string, publicKey string) error {
-	rpcClient, err := thisNode.Attach()
+// func updateBzz(bzzAddr string, publicKey string) error {
+// 	rpcClient, err := thisNode.Attach()
 
-	// Set Public key to associate with a particular Pss peer
-	err = rpcClient.Call(nil, "pss_setPeerPublicKey", publicKey, protocol.OrderbookTopic, bzzAddr)
-	return err
-}
+// 	// Set Public key to associate with a particular Pss peer
+// 	err = rpcClient.Call(nil, "pss_setPeerPublicKey", publicKey, protocol.OrderbookTopic, bzzAddr)
+// 	return err
+// }
 
 func addNode(rawurl string, publicKey string) error {
-
-	newNode, err := enode.ParseV4(rawurl)
+	// newNode, err := enode.ParseV4(rawurl)
+	newNode, err := discover.ParseNode(rawurl)
 	if err != nil {
 		demo.LogCrit("pass node addr fail", "err", err)
 		return err
@@ -269,19 +270,19 @@ func addNode(rawurl string, publicKey string) error {
 	demo.LogInfo("add node", "node", newNode.String())
 	thisNode.Server().AddPeer(newNode)
 
-	// if have protocol implemented
-	if len(pssprotos) > 0 {
-		nid := newNode.ID()
-		p := p2p.NewPeer(nid, nid.String(), []p2p.Cap{})
+	// // if have protocol implemented
+	// if len(pssprotos) > 0 {
+	// 	nid := newNode.ID()
+	// 	p := p2p.NewPeer(nid, nid.String(), []p2p.Cap{})
 
-		// add peer with its public key to this protocol on a topic and using asymetric cryptography
-		pssprotos[0].AddPeer(p, protocol.OrderbookTopic, true, publicKey)
+	// 	// add peer with its public key to this protocol on a topic and using asymetric cryptography
+	// 	pssprotos[0].AddPeer(p, protocol.OrderbookTopic, true, publicKey)
 
-		if err != nil {
-			demo.LogCrit("pss set pubkey fail", "err", err)
-		}
+	// 	if err != nil {
+	// 		demo.LogCrit("pss set pubkey fail", "err", err)
+	// 	}
 
-	}
+	// }
 
 	demo.LogInfo("Added node successfully!")
 	return nil
@@ -291,28 +292,28 @@ func nodeAddr() string {
 	return thisNode.Server().Self().String()
 }
 
-func bzzAddr() string {
-	// get the rpc clients
-	rpcClient, err := thisNode.Attach()
-	// get the recipient node's swarm overlay address
-	var bzzAddr string
-	err = rpcClient.Call(&bzzAddr, "pss_baseAddr")
-	if err != nil {
-		demo.LogCrit("pss get baseaddr fail", "err", err)
-	}
-	return bzzAddr
-}
+// func bzzAddr() string {
+// 	// get the rpc clients
+// 	rpcClient, err := thisNode.Attach()
+// 	// get the recipient node's swarm overlay address
+// 	var bzzAddr string
+// 	err = rpcClient.Call(&bzzAddr, "pss_baseAddr")
+// 	if err != nil {
+// 		demo.LogCrit("pss get baseaddr fail", "err", err)
+// 	}
+// 	return bzzAddr
+// }
 
-func publicKey() string {
-	// get the publickeys
-	var pubkey string
-	rpcClient, err := thisNode.Attach()
-	err = rpcClient.Call(&pubkey, "pss_getPublicKey")
-	if err != nil {
-		demo.LogCrit("pss get pubkey fail", "err", err)
-	}
-	return pubkey
-}
+// func publicKey() string {
+// 	// get the publickeys
+// 	var pubkey string
+// 	rpcClient, err := thisNode.Attach()
+// 	err = rpcClient.Call(&pubkey, "pss_getPublicKey")
+// 	if err != nil {
+// 		demo.LogCrit("pss get pubkey fail", "err", err)
+// 	}
+// 	return pubkey
+// }
 
 func processOrder(payload map[string]string) error {
 	// add order at this current node first
@@ -321,19 +322,21 @@ func processOrder(payload map[string]string) error {
 	msg, err := protocol.NewOrderbookMsg(payload)
 	if err == nil {
 		// try to store into model, if success then process at local and broad cast
-		err = orderbookModel.ProcessOrder(msg)
-		if err == nil {
-			trades, orderInBook := orderbookModel.Orderbook.ProcessOrder(payload, false)
-			demo.LogInfo("Orderbook result", "Trade", trades, "OrderInBook", orderInBook)
-			msgC <- msg
-		}
+		// err = orderbookModel.ProcessOrder(msg)
+		// if err == nil {
+		trades, orderInBook := orderbookModel.ProcessOrder(msg)
+		demo.LogInfo("Orderbook result", "Trade", trades, "OrderInBook", orderInBook)
+
+		// broad cast message
+		msgC <- msg
+		// }
 	}
 
 	return nil
 }
 
 // simple ping and receive protocol
-func startup(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey string, genesisPath string, mining bool) {
+func startup(p2pPort int, httpPort int, wsPort int, name string, privateKey string, genesisPath string, mining bool) {
 
 	var err error
 
@@ -344,12 +347,26 @@ func startup(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey stri
 	rpcapi := []string{
 		"eth",
 		// "ssh",
-		"personal",
-		"pss",
+		// "personal",
+		// "pss",
 		"orderbook",
 	}
-	thisNode, err = demo.NewServiceNodeWithPrivateKey(privkey, p2pPort, httpPort, wsPort, rpcapi...)
+	dataDir := fmt.Sprintf("%s%d", demo.DatadirPrefix, p2pPort)
+	orderbookDir := path.Join(dataDir, "orderbook")
+	allowedPairs := map[string]*big.Int{
+		"TOMO/WETH": big.NewInt(10e9),
+	}
+	orderbookModel = protocol.NewModel(orderbookDir, allowedPairs)
 
+	proto := protocol.NewProtocol(msgC, quitC, orderbookModel)
+	var protocolArr []p2p.Protocol
+	if proto != nil {
+		protocolArr = []p2p.Protocol{*proto}
+	}
+
+	thisNode, err = demo.NewServiceNodeWithPrivateKeyAndDataDirAndProtocols(privkey, dataDir, p2pPort, httpPort, wsPort, protocolArr, rpcapi...)
+	// proto := protocol.NewProtocol(msgC, quitC, orderbookModel)
+	// server := demo.NewServer(privateKey, name, *proto, httpPort)
 	if err != nil {
 		demo.LogCrit(err.Error())
 	}
@@ -369,18 +386,17 @@ func startup(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey stri
 	// utils.RegisterShhService(thisNode, &sshConfig)
 
 	// register swarm service
-	bzzURL := fmt.Sprintf("http://%s:%d", node.DefaultHTTPHost, bzzPort)
+	// bzzURL := fmt.Sprintf("http://%s:%d", node.DefaultHTTPHost, bzzPort)
 
-	signer := feed.NewGenericSigner(privkey)
-	orderbookModel = protocol.NewModel(bzzURL, signer)
+	// signer := feed.NewGenericSigner(privkey)
 
-	protocolSpecs := []*protocols.Spec{protocol.OrderbookProtocol}
-	proto := protocol.New(msgC, quitC, orderbookModel)
-	protocolArr := []*p2p.Protocol{proto}
+	// protocolSpecs := []*protocols.Spec{protocol.OrderbookProtocol}
 
 	// register the pss activated bzz services
-	svc := demo.NewSwarmServiceWithProtocolAndPrivateKey(thisNode, bzzPort, protocolSpecs, protocolArr, &protocol.OrderbookTopic, &pssprotos, privkey)
-	err = thisNode.Register(svc)
+	// svc := demo.NewSwarmServiceWithProtocolAndPrivateKey(thisNode, bzzPort, protocolSpecs, protocolArr, &protocol.OrderbookTopic, &pssprotos, privkey)
+	// err = thisNode.Register(svc)
+
+	// thisNode.Server().Protocols = protocolArr
 
 	if err != nil {
 		demo.LogCrit("servicenode pss register fail", "err", err)
@@ -397,15 +413,15 @@ func startup(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey stri
 		demo.LogCrit("servicenode start failed", "err", err)
 	}
 
-	rpcClient, err := thisNode.Attach()
-	// wait until the state of the swarm overlay network is ready
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	err = demo.WaitHealthy(ctx, 1, rpcClient)
-	if err != nil {
-		demo.LogCrit("health check fail", "err", err)
-	}
-	time.Sleep(time.Second) // because the healthy does not work
+	// rpcClient, err := thisNode.Attach()
+	// // wait until the state of the swarm overlay network is ready
+	// ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	// defer cancel()
+	// err = demo.WaitHealthy(ctx, 1, rpcClient)
+	// if err != nil {
+	// 	demo.LogCrit("health check fail", "err", err)
+	// }
+	// time.Sleep(time.Second) // because the healthy does not work
 
 	// config ethereum
 	var ethereum *eth.Ethereum
@@ -414,7 +430,7 @@ func startup(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey stri
 	}
 
 	// config ethereum gas price
-	ethereum.TxPool().SetGasPrice(ethConfig.MinerGasPrice)
+	ethereum.TxPool().SetGasPrice(ethConfig.GasPrice)
 
 	password := "123456789"
 	ks := thisNode.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
@@ -427,9 +443,8 @@ func startup(p2pPort int, httpPort int, wsPort int, bzzPort int, privateKey stri
 
 	// if this node can mine
 	if mining {
-		if err := ethereum.StartMining(0); err != nil {
-			demo.LogError(fmt.Sprintf("Failed to start mining: %v", err))
-		}
+		miner := ethereum.Miner()
+		miner.Start(account.Address)
 	}
 
 }
@@ -450,6 +465,6 @@ func initGenesis(stack *node.Node, genesisPath string) (*eth.Config, error) {
 	err = json.Unmarshal(databytes, &genesis)
 	ethConfig.Genesis = &genesis
 
-	demo.LogInfo("Genesis", "chainid", genesis.Config.ChainID)
+	demo.LogInfo("Genesis", "chainid", genesis.Config.ChainId.String())
 	return ethConfig, err
 }

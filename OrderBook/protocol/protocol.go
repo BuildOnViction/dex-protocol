@@ -1,13 +1,11 @@
 package protocol
 
 import (
-	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/swarm/pss"
+
 	demo "github.com/tomochain/orderbook/common"
 )
 
@@ -23,46 +21,47 @@ var (
 		},
 	}
 
-	OrderbookTopic = pss.ProtocolTopic(OrderbookProtocol)
+	// OrderbookTopic = pss.ProtocolTopic(OrderbookProtocol)
 )
 
 // OrderbookMsg : sort fields by ASC, can use map directly, or type that rlpx supports, such as uint(must >0)
 type OrderbookMsg struct {
-	Coin      string
-	ID        string
-	Price     string
-	Quantity  string
-	Side      string
-	Timestamp uint64
-	TradeID   string
-	Type      string
+	PairName string
+	ID       string
+	Price    string
+	Quantity string
+	Side     string
+	// Timestamp uint
+	TradeID string
+	Type    string
 }
 
 func (msg *OrderbookMsg) ToQuote() map[string]string {
 	quote := make(map[string]string)
-	quote["timestamp"] = strconv.FormatUint(msg.Timestamp, 10)
+	// quote["timestamp"] = strconv.FormatUint(msg.Timestamp, 10)
 	quote["type"] = msg.Type
 	quote["side"] = msg.Side
 	quote["quantity"] = msg.Quantity
 	quote["price"] = msg.Price
 	quote["trade_id"] = msg.TradeID
-	quote["coin"] = msg.Coin
+	quote["pairName"] = msg.PairName
+	// if insert id is not used, just for update
 	quote["id"] = msg.ID
 	return quote
 }
 
 func NewOrderbookMsg(quote map[string]string) (*OrderbookMsg, error) {
-	timestamp, err := strconv.ParseUint(quote["timestamp"], 10, 64)
+	// timestamp, err := strconv.ParseUint(quote["timestamp"], 10, 64)
 	return &OrderbookMsg{
-		Timestamp: timestamp,
-		Type:      quote["type"],
-		Side:      quote["side"],
-		Quantity:  quote["quantity"],
-		Price:     quote["price"],
-		TradeID:   quote["trade_id"],
-		Coin:      quote["coin"],
-		ID:        quote["id"],
-	}, err
+		// Timestamp: timestamp,
+		Type:     quote["type"],
+		Side:     quote["side"],
+		Quantity: quote["quantity"],
+		Price:    quote["price"],
+		TradeID:  quote["trade_id"],
+		PairName: quote["pairName"],
+		ID:       quote["id"],
+	}, nil
 }
 
 type OrderbookHandshake struct {
@@ -79,7 +78,7 @@ type OrderbookHandler struct {
 }
 
 // we will receive message in handle
-func (orderbookHandler *OrderbookHandler) handle(ctx context.Context, msg interface{}) error {
+func (orderbookHandler *OrderbookHandler) handle(msg interface{}) error {
 
 	// we got message or handshake
 	message, ok := msg.(*OrderbookMsg)
@@ -96,7 +95,8 @@ func (orderbookHandler *OrderbookHandler) handle(ctx context.Context, msg interf
 		// add Order
 		payload := message.ToQuote()
 		demo.LogInfo("-> Add order", "payload", payload)
-		trades, orderInBook := orderbookHandler.Model.Orderbook.ProcessOrder(payload, false)
+
+		trades, orderInBook := orderbookHandler.Model.ProcessOrder(message)
 		demo.LogInfo("Orderbook result", "Trade", trades, "OrderInBook", orderInBook)
 		return nil
 	}
@@ -117,7 +117,7 @@ func (orderbookHandler *OrderbookHandler) handle(ctx context.Context, msg interf
 						// databytes, err := json.Marshal(inmsg)
 
 						demo.LogDebug("Sending orderbook", "orderbook", inmsg)
-						orderbookHandler.Peer.Send(context.Background(), inmsg)
+						orderbookHandler.Peer.Send(inmsg)
 
 					}
 
@@ -135,7 +135,7 @@ func (orderbookHandler *OrderbookHandler) handle(ctx context.Context, msg interf
 }
 
 // create the protocol with the protocols extension
-func New(inC <-chan interface{}, quitC <-chan struct{}, orderbookModel *OrderbookModel) *p2p.Protocol {
+func NewProtocol(inC <-chan interface{}, quitC <-chan struct{}, orderbookModel *OrderbookModel) *p2p.Protocol {
 	return &p2p.Protocol{
 		Name:    "Orderbook",
 		Version: 42,
@@ -152,7 +152,7 @@ func New(inC <-chan interface{}, quitC <-chan struct{}, orderbookModel *Orderboo
 					// shortened hex string for terminal logging
 					Nick: p.Name(),
 				}
-				err := pp.Send(context.Background(), outmsg)
+				err := pp.Send(outmsg)
 				if err != nil {
 					demo.LogError("Send p2p message fail", "err", err)
 				}

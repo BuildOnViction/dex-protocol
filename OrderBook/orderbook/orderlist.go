@@ -65,12 +65,12 @@ func NewOrderListWithItem(item *OrderListItem, orderTree *OrderTree) *OrderList 
 		orderTree: orderTree,
 	}
 
+	// priceKey will be slot of order tree + plus price key
 	// we can use orderList slot as orderbook slot to store sequential of orders
 	if orderTree.orderBook != nil {
 		orderList.slot = orderTree.orderBook.slot
 	} else {
 		// orderList.slot = Zero()
-		// priceKey will be slot of order tree + plus price key
 		//
 		orderList.slot = new(big.Int).SetBytes(crypto.Keccak256(key))
 	}
@@ -87,27 +87,29 @@ func NewOrderListWithItem(item *OrderListItem, orderTree *OrderTree) *OrderList 
 // }
 
 func (orderList *OrderList) GetOrder(key []byte) *Order {
-	if orderList.isEmptyKey(key) {
-		return nil
-	}
-	// orderID := key
-	storedKey := orderList.GetOrderIDFromKey(key)
-	orderItem := &OrderItem{}
-	// var orderItem *OrderItem
-	val, err := orderList.orderTree.orderDB.Get(storedKey, orderItem)
-	if err != nil {
-		fmt.Printf("Key not found :%x, %v\n", storedKey, err)
-		return nil
-	}
-
+	// re-use method from orderbook, because orderlist has the same slot as orderbook
+	return orderList.orderTree.orderBook.GetOrder(key)
+	// if orderList.isEmptyKey(key) {
+	// 	return nil
+	// }
+	// // orderID := key
+	// storedKey := orderList.GetOrderIDFromKey(key)
 	// orderItem := &OrderItem{}
-	// rlp.DecodeBytes(bytes, orderItem)
-	// orderItem := val.(*OrderItem)
-	order := &Order{
-		Item: val.(*OrderItem),
-		Key:  key,
-	}
-	return order
+	// // var orderItem *OrderItem
+	// val, err := orderList.orderTree.orderDB.Get(storedKey, orderItem)
+	// if err != nil {
+	// 	fmt.Printf("Key not found :%x, %v\n", storedKey, err)
+	// 	return nil
+	// }
+
+	// // orderItem := &OrderItem{}
+	// // rlp.DecodeBytes(bytes, orderItem)
+	// // orderItem := val.(*OrderItem)
+	// order := &Order{
+	// 	Item: val.(*OrderItem),
+	// 	Key:  key,
+	// }
+	// return order
 
 	// order := orderList.orderTree.GetOrder(orderID)
 	// if order != nil {
@@ -120,6 +122,14 @@ func (orderList *OrderList) GetOrder(key []byte) *Order {
 
 func (orderList *OrderList) isEmptyKey(key []byte) bool {
 	return orderList.orderTree.PriceTree.IsEmptyKey(key)
+}
+
+func (orderList *OrderList) Head() *Order {
+	return orderList.GetOrder(orderList.Item.HeadOrder)
+}
+
+func (orderList *OrderList) Tail() *Order {
+	return orderList.GetOrder(orderList.Item.TailOrder)
 }
 
 // String : travel the list to print it in nice format
@@ -139,7 +149,7 @@ func (orderList *OrderList) String(startDepth int) string {
 	buffer.WriteString("\n\t")
 	buffer.WriteString(tabs)
 	buffer.WriteString("Head:")
-	linkedList := orderList.GetOrder(orderList.Item.HeadOrder)
+	linkedList := orderList.Head()
 	depth := 0
 	for linkedList != nil {
 		depth++
@@ -158,7 +168,7 @@ func (orderList *OrderList) String(startDepth int) string {
 	buffer.WriteString("\n\t")
 	buffer.WriteString(tabs)
 	buffer.WriteString("Tail:")
-	linkedList = orderList.GetOrder(orderList.Item.TailOrder)
+	linkedList = orderList.Tail()
 	depth = 0
 	for linkedList != nil {
 		depth++
@@ -201,6 +211,15 @@ func (orderList *OrderList) Save() error {
 	// return orderList.orderTree.PriceTree.Put(orderList.Key, value)
 
 	return orderList.orderTree.SaveOrderList(orderList)
+}
+
+// return the input orderID
+func (orderList *OrderList) GetOrderIDFromList(key []byte) uint64 {
+	orderSlot := new(big.Int).SetBytes(key)
+	// fmt.Println("FAIL", key, orderList.slot)
+	return Sub(orderSlot, orderList.slot).Uint64()
+	// orderbook:[1,2,3,4]
+	// return key
 }
 
 // GetOrderIDFromKey
