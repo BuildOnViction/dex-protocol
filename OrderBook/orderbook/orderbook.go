@@ -12,25 +12,23 @@ import (
 )
 
 const (
-	// ASK : ask constant
-	ASK = "ask"
-	// BID : bid constant
-	BID              = "bid"
-	ORDERTYPE_MARKET = "market"
-	ORDERTYPE_LIMIT  = "limit"
+	// Ask : ask constant
+	Ask = "ask"
+	// Bid : bid constant
+	Bid    = "bid"
+	Market = "market"
+	Limit  = "limit"
+
+	// we use a big number as segment for storing order, order list from order tree slot.
+	// as sequential id
+	SlotSegment = common.AddressLength
 )
 
-// we use a big number as segment for storing order, order list from order tree slot.
-// as sequential id
-const segment = 1
-
-var askSlotKey = common.StringToHash(ASK).Bytes()
-var bidSlotKey = common.StringToHash(BID).Bytes()
-
 type OrderBookItem struct {
-	Timestamp   uint64 `json:"time"`
-	NextOrderID uint64 `json:"nextOrderID"`
-	Name        string `json:"name"`
+	Timestamp     uint64 `json:"time"`
+	NextOrderID   uint64 `json:"nextOrderID"`
+	MaxPricePoint uint64 `json:"maxVolume"` // maximum
+	Name          string `json:"name"`
 }
 
 // OrderBook : list of orders
@@ -69,9 +67,12 @@ func NewOrderBook(name string, db *BatchDatabase) *OrderBook {
 	// bidsKey := crypto.Keccak256(key, bidSlotKey)
 	// asksKey := crypto.Keccak256(key, askSlotKey)
 
-	// we just increase the segment at the most byte to prevent conflict
-	bidsKey := GetSegmentHash(key, 1)
-	asksKey := GetSegmentHash(key, 2)
+	// we just increase the segment at the most byte at address length level to avoid conflict
+	// somehow it is like 2 hashes has the same common prefix and it is very difficult to resolve
+	// the order id start at orderbook slot
+	// the price of order tree start at order tree slot
+	bidsKey := GetSegmentHash(key, 1, SlotSegment)
+	asksKey := GetSegmentHash(key, 2, SlotSegment)
 
 	orderBook := &OrderBook{
 		db:   db,
@@ -149,9 +150,11 @@ func (orderBook *OrderBook) Restore() error {
 
 func (orderBook *OrderBook) String(startDepth int) string {
 	tabs := strings.Repeat("\t", startDepth)
-	return fmt.Sprintf("{\n\t%sBids: %s\n\t%sAsks: %s\n\t%sName: %s\n\t%sTimestamp: %d\n\t%sNextOrderID: %d\n%s}\n",
+	return fmt.Sprintf("%s{\n\t%sName: %s\n\t%sTimestamp: %d\n\t%sNextOrderID: %d\n\t%sBids: %s\n\t%sAsks: %s\n%s}\n",
+		tabs,
+		tabs, orderBook.Item.Name, tabs, orderBook.Item.Timestamp, tabs, orderBook.Item.NextOrderID,
 		tabs, orderBook.Bids.String(startDepth+1), tabs, orderBook.Asks.String(startDepth+1),
-		tabs, orderBook.Item.Name, tabs, orderBook.Item.Timestamp, tabs, orderBook.Item.NextOrderID, tabs)
+		tabs)
 }
 
 // UpdateTime : update time for order book
@@ -188,17 +191,17 @@ func (orderBook *OrderBook) processMarketOrder(quote map[string]string, verbose 
 	var newTrades []map[string]string
 	// speedup the comparison, do not assign because it is pointer
 	zero := Zero()
-	if side == BID {
+	if side == Bid {
 		for quantityToTrade.Cmp(zero) > 0 && orderBook.Asks.NotEmpty() {
 			bestPriceAsks := orderBook.Asks.MinPriceList()
-			quantityToTrade, newTrades = orderBook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
+			quantityToTrade, newTrades = orderBook.processOrderList(Ask, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 		}
-		// } else if side == ASK {
+		// } else if side == Ask {
 	} else {
 		for quantityToTrade.Cmp(zero) > 0 && orderBook.Bids.NotEmpty() {
 			bestPriceBids := orderBook.Bids.MaxPriceList()
-			quantityToTrade, newTrades = orderBook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
+			quantityToTrade, newTrades = orderBook.processOrderList(Bid, bestPriceBids, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 		}
 	}
@@ -218,11 +221,11 @@ func (orderBook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 	// speedup the comparison, do not assign because it is pointer
 	zero := Zero()
 
-	if side == BID {
+	if side == Bid {
 		minPrice := orderBook.Asks.MinPrice()
 		for quantityToTrade.Cmp(zero) > 0 && orderBook.Asks.NotEmpty() && price.Cmp(minPrice) >= 0 {
 			bestPriceAsks := orderBook.Asks.MinPriceList()
-			quantityToTrade, newTrades = orderBook.processOrderList(ASK, bestPriceAsks, quantityToTrade, quote, verbose)
+			quantityToTrade, newTrades = orderBook.processOrderList(Ask, bestPriceAsks, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 			minPrice = orderBook.Asks.MinPrice()
 		}
@@ -234,12 +237,12 @@ func (orderBook *OrderBook) processLimitOrder(quote map[string]string, verbose b
 			orderInBook = quote
 		}
 
-		// } else if side == ASK {
+		// } else if side == Ask {
 	} else {
 		maxPrice := orderBook.Bids.MaxPrice()
 		for quantityToTrade.Cmp(zero) > 0 && orderBook.Bids.NotEmpty() && price.Cmp(maxPrice) <= 0 {
 			bestPriceBids := orderBook.Bids.MaxPriceList()
-			quantityToTrade, newTrades = orderBook.processOrderList(BID, bestPriceBids, quantityToTrade, quote, verbose)
+			quantityToTrade, newTrades = orderBook.processOrderList(Bid, bestPriceBids, quantityToTrade, quote, verbose)
 			trades = append(trades, newTrades...)
 			maxPrice = orderBook.Bids.MaxPrice()
 		}
@@ -265,7 +268,7 @@ func (orderBook *OrderBook) ProcessOrder(quote map[string]string, verbose bool) 
 	// if we do not use auto-increment orderid, we must set price slot to avoid conflict
 	orderBook.Item.NextOrderID++
 
-	if orderType == ORDERTYPE_MARKET {
+	if orderType == Market {
 		trades = orderBook.processMarketOrder(quote, verbose)
 	} else {
 		trades, orderInBook = orderBook.processLimitOrder(quote, verbose)
@@ -309,7 +312,7 @@ func (orderBook *OrderBook) processOrderList(side string, orderList *OrderList, 
 
 		} else if IsEqual(quantityToTrade, headOrder.Item.Quantity) {
 			tradedQuantity = CloneBigInt(quantityToTrade)
-			if side == BID {
+			if side == Bid {
 				// orderBook.Bids.RemoveOrderByID(headOrder.Key)
 				orderBook.Bids.RemoveOrder(headOrder)
 			} else {
@@ -320,7 +323,7 @@ func (orderBook *OrderBook) processOrderList(side string, orderList *OrderList, 
 
 		} else {
 			tradedQuantity = CloneBigInt(headOrder.Item.Quantity)
-			if side == BID {
+			if side == Bid {
 				// orderBook.Bids.RemoveOrderByID(headOrder.Key)
 				orderBook.Bids.RemoveOrder(headOrder)
 			} else {
@@ -359,7 +362,7 @@ func (orderBook *OrderBook) CancelOrder(side string, orderID int, price *big.Int
 	orderBook.UpdateTime()
 	key := GetKeyFromBig(big.NewInt(int64(orderID)))
 
-	if side == BID {
+	if side == Bid {
 		order := orderBook.Bids.GetOrder(key, price)
 		if order != nil {
 			orderBook.Bids.RemoveOrder(order)
@@ -388,7 +391,7 @@ func (orderBook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID i
 	quoteUpdate["order_id"] = strconv.Itoa(orderID)
 	quoteUpdate["timestamp"] = strconv.FormatUint(orderBook.Item.Timestamp, 10)
 	key := GetKeyFromBig(ToBigInt(quoteUpdate["order_id"]))
-	if side == BID {
+	if side == Bid {
 
 		if orderBook.Bids.OrderExist(key, price) {
 			orderBook.Bids.UpdateOrder(quoteUpdate)
@@ -407,7 +410,7 @@ func (orderBook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID i
 // VolumeAtPrice : get volume at the current price
 func (orderBook *OrderBook) VolumeAtPrice(side string, price *big.Int) *big.Int {
 	volume := Zero()
-	if side == BID {
+	if side == Bid {
 		if orderBook.Bids.PriceExist(price) {
 			orderList := orderBook.Bids.PriceList(price)
 			// incase we use cache for PriceList

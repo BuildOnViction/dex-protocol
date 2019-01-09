@@ -26,10 +26,12 @@ func EmptyKey() []byte {
 	return key
 }
 
-func GetSegmentHash(key []byte, segment uint8) []byte {
-	segmentKey := make([]byte, len(key))
+func GetSegmentHash(key []byte, segment, index uint8) []byte {
+	keyLength := len(key)
+	segmentKey := make([]byte, keyLength)
 	copy(segmentKey, key)
-	segmentKey[0] = byte(uint8(segmentKey[0]) + segment)
+	segmentKey[index] = byte(uint8(segmentKey[index]) + segment)
+
 	return segmentKey
 }
 

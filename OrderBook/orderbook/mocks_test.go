@@ -7,6 +7,9 @@ var testDB = NewBatchDatabaseWithEncode(datadir, 0, 0, EncodeBytesItem, DecodeBy
 
 var testOrderTree = NewOrderTree(testDB, []byte("ordertree"))
 
+// orderbook for this pair
+var pairName = "TOMO/WETH"
+
 var testTimestamp uint64 = 123452342343
 var testQuanity = ToBigInt("1000")
 var testPrice = ToBigInt("1000")
