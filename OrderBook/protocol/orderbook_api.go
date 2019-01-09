@@ -9,8 +9,8 @@ import (
 
 // remember that API structs to be offered MUST be exported
 type OrderbookAPI struct {
-	V     int
-	Model *OrderbookModel
+	V      int
+	Engine *orderbook.Engine
 }
 
 // Version : return version
@@ -18,10 +18,10 @@ func (api *OrderbookAPI) Version() (int, error) {
 	return api.V, nil
 }
 
-func NewOrderbookAPI(v int, orderbookModel *OrderbookModel) *OrderbookAPI {
+func NewOrderbookAPI(v int, orderbookEngine *orderbook.Engine) *OrderbookAPI {
 	return &OrderbookAPI{
-		V:     v,
-		Model: orderbookModel,
+		V:      v,
+		Engine: orderbookEngine,
 	}
 }
 
@@ -37,7 +37,7 @@ func (api *OrderbookAPI) getRecordFromOrder(order *orderbook.Order, ob *orderboo
 }
 
 func (api *OrderbookAPI) GetBestAskList(pairName string) []map[string]string {
-	ob, _ := api.Model.GetOrderBook(pairName)
+	ob, _ := api.Engine.GetOrderBook(pairName)
 	if ob == nil {
 		return nil
 	}
@@ -59,7 +59,7 @@ func (api *OrderbookAPI) GetBestAskList(pairName string) []map[string]string {
 }
 
 func (api *OrderbookAPI) GetBestBidList(pairName string) []map[string]string {
-	ob, _ := api.Model.GetOrderBook(pairName)
+	ob, _ := api.Engine.GetOrderBook(pairName)
 	if ob == nil {
 		return nil
 	}
@@ -82,7 +82,7 @@ func (api *OrderbookAPI) GetBestBidList(pairName string) []map[string]string {
 
 func (api *OrderbookAPI) GetOrder(pairName, orderID string) map[string]string {
 	var result map[string]string
-	ob, _ := api.Model.GetOrderBook(pairName)
+	ob, _ := api.Engine.GetOrderBook(pairName)
 	if ob == nil {
 		return nil
 	}
@@ -100,5 +100,5 @@ func (api *OrderbookAPI) GetOrder(pairName, orderID string) map[string]string {
 // 		Time:  time,
 // 		Level: level,
 // 	}
-// 	return api.Model.UpdateData(coin, signerAddress, epoch, hexData, hexSignature)
+// 	return api.Engine.UpdateData(coin, signerAddress, epoch, hexData, hexSignature)
 // }

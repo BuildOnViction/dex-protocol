@@ -4,13 +4,14 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/tomochain/orderbook/orderbook"
 )
 
 // the service we want to offer on the node
 // it must implement the node.Service interface
 type OrderbookService struct {
-	V     int
-	Model *OrderbookModel
+	V      int
+	Engine *orderbook.Engine
 }
 
 // APIs : api service
@@ -20,7 +21,7 @@ func (service *OrderbookService) APIs() []rpc.API {
 		{
 			Namespace: "orderbook",
 			Version:   "0.42",
-			Service:   NewOrderbookAPI(service.V, service.Model),
+			Service:   NewOrderbookAPI(service.V, service.Engine),
 			Public:    true,
 		},
 	}
@@ -41,11 +42,11 @@ func (service *OrderbookService) Stop() error {
 }
 
 // wrapper function for servicenode to start the service
-func NewService(orderbookModel *OrderbookModel) func(ctx *node.ServiceContext) (node.Service, error) {
+func NewService(orderbookEngine *orderbook.Engine) func(ctx *node.ServiceContext) (node.Service, error) {
 	return func(ctx *node.ServiceContext) (node.Service, error) {
 		return &OrderbookService{
-			V:     42,
-			Model: orderbookModel,
+			V:      42,
+			Engine: orderbookEngine,
 		}, nil
 	}
 }

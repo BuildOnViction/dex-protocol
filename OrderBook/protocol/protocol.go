@@ -2,11 +2,13 @@ package protocol
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 
 	demo "github.com/tomochain/orderbook/common"
+	"github.com/tomochain/orderbook/orderbook"
 )
 
 var (
@@ -26,19 +28,19 @@ var (
 
 // OrderbookMsg : sort fields by ASC, can use map directly, or type that rlpx supports, such as uint(must >0)
 type OrderbookMsg struct {
-	PairName string
-	ID       string
-	Price    string
-	Quantity string
-	Side     string
-	// Timestamp uint
-	TradeID string
-	Type    string
+	PairName  string
+	ID        string
+	Price     string
+	Quantity  string
+	Side      string
+	Timestamp uint64
+	TradeID   string
+	Type      string
 }
 
 func (msg *OrderbookMsg) ToQuote() map[string]string {
 	quote := make(map[string]string)
-	// quote["timestamp"] = strconv.FormatUint(msg.Timestamp, 10)
+	quote["timestamp"] = strconv.FormatUint(msg.Timestamp, 10)
 	quote["type"] = msg.Type
 	quote["side"] = msg.Side
 	quote["quantity"] = msg.Quantity
@@ -51,17 +53,17 @@ func (msg *OrderbookMsg) ToQuote() map[string]string {
 }
 
 func NewOrderbookMsg(quote map[string]string) (*OrderbookMsg, error) {
-	// timestamp, err := strconv.ParseUint(quote["timestamp"], 10, 64)
+	timestamp, err := strconv.ParseUint(quote["timestamp"], 10, 64)
 	return &OrderbookMsg{
-		// Timestamp: timestamp,
-		Type:     quote["type"],
-		Side:     quote["side"],
-		Quantity: quote["quantity"],
-		Price:    quote["price"],
-		TradeID:  quote["trade_id"],
-		PairName: quote["pairName"],
-		ID:       quote["id"],
-	}, nil
+		Timestamp: timestamp,
+		Type:      quote["type"],
+		Side:      quote["side"],
+		Quantity:  quote["quantity"],
+		Price:     quote["price"],
+		TradeID:   quote["trade_id"],
+		PairName:  quote["pairName"],
+		ID:        quote["id"],
+	}, err
 }
 
 type OrderbookHandshake struct {
@@ -71,10 +73,10 @@ type OrderbookHandshake struct {
 
 // the protocols abstraction enables use of an external handler function
 type OrderbookHandler struct {
-	Model *OrderbookModel
-	Peer  *protocols.Peer
-	InC   <-chan interface{}
-	QuitC <-chan struct{}
+	Engine *orderbook.Engine
+	Peer   *protocols.Peer
+	InC    <-chan interface{}
+	QuitC  <-chan struct{}
 }
 
 // we will receive message in handle
@@ -96,7 +98,7 @@ func (orderbookHandler *OrderbookHandler) handle(msg interface{}) error {
 		payload := message.ToQuote()
 		demo.LogInfo("-> Add order", "payload", payload)
 
-		trades, orderInBook := orderbookHandler.Model.ProcessOrder(message)
+		trades, orderInBook := orderbookHandler.Engine.ProcessOrder(payload)
 		demo.LogInfo("Orderbook result", "Trade", trades, "OrderInBook", orderInBook)
 		return nil
 	}
@@ -135,7 +137,7 @@ func (orderbookHandler *OrderbookHandler) handle(msg interface{}) error {
 }
 
 // create the protocol with the protocols extension
-func NewProtocol(inC <-chan interface{}, quitC <-chan struct{}, orderbookModel *OrderbookModel) *p2p.Protocol {
+func NewProtocol(inC <-chan interface{}, quitC <-chan struct{}, orderbookEngine *orderbook.Engine) *p2p.Protocol {
 	return &p2p.Protocol{
 		Name:    "Orderbook",
 		Version: 42,
@@ -162,8 +164,8 @@ func NewProtocol(inC <-chan interface{}, quitC <-chan struct{}, orderbookModel *
 			// protocols abstraction provides a separate blocking run loop for the peer
 			// when this returns, the protocol will be terminated
 			run := &OrderbookHandler{
-				Model: orderbookModel,
-				Peer:  pp,
+				Engine: orderbookEngine,
+				Peer:   pp,
 				// assign channel
 				InC:   inC,
 				QuitC: quitC,

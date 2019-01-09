@@ -48,7 +48,7 @@ var (
 	prompt   *promptui.Select
 	commands []terminal.Command
 
-	orderbookModel *protocol.OrderbookModel
+	orderbookEngine *orderbook.Engine
 )
 
 func initPrompt(privateKeyName string) {
@@ -200,7 +200,7 @@ func Start(p2pPort int, httpPort int, wsPort int, name string, privateKey string
 			if command.Name == "quit" {
 				demo.LogInfo("Server quiting...")
 				// commit changes to orderbook
-				orderbookModel.Commit()
+				orderbookEngine.Commit()
 				endWaiter.Done()
 				thisNode.Stop()
 				quitC <- struct{}{}
@@ -322,9 +322,9 @@ func processOrder(payload map[string]string) error {
 	msg, err := protocol.NewOrderbookMsg(payload)
 	if err == nil {
 		// try to store into model, if success then process at local and broad cast
-		// err = orderbookModel.ProcessOrder(msg)
+		// err = orderbookEngine.ProcessOrder(msg)
 		// if err == nil {
-		trades, orderInBook := orderbookModel.ProcessOrder(msg)
+		trades, orderInBook := orderbookEngine.ProcessOrder(payload)
 		demo.LogInfo("Orderbook result", "Trade", trades, "OrderInBook", orderInBook)
 
 		// broad cast message
@@ -356,16 +356,16 @@ func startup(p2pPort int, httpPort int, wsPort int, name string, privateKey stri
 	allowedPairs := map[string]*big.Int{
 		"TOMO/WETH": big.NewInt(10e9),
 	}
-	orderbookModel = protocol.NewModel(orderbookDir, allowedPairs)
+	orderbookEngine = orderbook.NewEngine(orderbookDir, allowedPairs)
 
-	proto := protocol.NewProtocol(msgC, quitC, orderbookModel)
+	proto := protocol.NewProtocol(msgC, quitC, orderbookEngine)
 	var protocolArr []p2p.Protocol
 	if proto != nil {
 		protocolArr = []p2p.Protocol{*proto}
 	}
 
 	thisNode, err = demo.NewServiceNodeWithPrivateKeyAndDataDirAndProtocols(privkey, dataDir, p2pPort, httpPort, wsPort, protocolArr, rpcapi...)
-	// proto := protocol.NewProtocol(msgC, quitC, orderbookModel)
+	// proto := protocol.NewProtocol(msgC, quitC, orderbookEngine)
 	// server := demo.NewServer(privateKey, name, *proto, httpPort)
 	if err != nil {
 		demo.LogCrit(err.Error())
@@ -402,7 +402,7 @@ func startup(p2pPort int, httpPort int, wsPort int, name string, privateKey stri
 		demo.LogCrit("servicenode pss register fail", "err", err)
 	}
 	// register normal service, using bzz client internally
-	err = thisNode.Register(protocol.NewService(orderbookModel))
+	err = thisNode.Register(protocol.NewService(orderbookEngine))
 	if err != nil {
 		demo.LogCrit("Register orderbook service in servicenode failed", "err", err)
 	}

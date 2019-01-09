@@ -1,7 +1,8 @@
 package orderbook
 
-// var datadir = "../datadir/testing"
-var datadir = "../../.data_30100/orderbook/"
+var datadir = "../datadir/testing"
+
+// var datadir = "../../.data_30100/orderbook/"
 
 // override Encode and Decode for better performance
 var testDB = NewBatchDatabaseWithEncode(datadir, 0, 0, EncodeBytesItem, DecodeBytesItem)
