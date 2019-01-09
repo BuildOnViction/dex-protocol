@@ -1,8 +1,10 @@
 package protocol
 
 import (
+	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -74,6 +76,18 @@ type OrderbookHandler struct {
 	QuitC  <-chan struct{}
 }
 
+// checkProtoHandshake verifies local and remote protoHandshakes match
+func checkProtoHandshake(testVersion uint) func(interface{}) error {
+	return func(rhs interface{}) error {
+		remote := rhs.(*OrderbookHandshake)
+
+		if remote.V != testVersion {
+			return fmt.Errorf("%d (!= %d)", remote.V, testVersion)
+		}
+		return nil
+	}
+}
+
 // we will receive message in handle
 func (orderbookHandler *OrderbookHandler) handle(msg interface{}) error {
 
@@ -127,34 +141,46 @@ func (orderbookHandler *OrderbookHandler) handle(msg interface{}) error {
 		return nil
 	}
 
-	return fmt.Errorf("Invalid pssorderbook protocol message")
+	return fmt.Errorf("Invalid orderbook protocol message")
 
 }
 
 // create the protocol with the protocols extension
-func NewProtocol(inC <-chan interface{}, quitC <-chan struct{}, orderbookEngine *orderbook.Engine) *p2p.Protocol {
+func NewProtocol(name string, inC <-chan interface{}, quitC <-chan struct{}, orderbookEngine *orderbook.Engine) *p2p.Protocol {
 	return &p2p.Protocol{
 		Name:    "Orderbook",
 		Version: 42,
-		Length:  1,
+		// we may use more 1 custom message code
+		Length: uint64(len(OrderbookProtocol.Messages)) + 1,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 			demo.LogWarn("running", "peer", p)
+			var err error
 			// create the enhanced peer, it will wrap p2p.Send with code from Message Spec
 			pp := protocols.NewPeer(p, rw, OrderbookProtocol)
 
 			// send the message, then handle it to make sure protocol success
-			go func() {
-				outmsg := &OrderbookHandshake{
-					V: 42,
-					// shortened hex string for terminal logging
-					Nick: p.Name(),
-				}
-				err := pp.Send(outmsg)
-				if err != nil {
-					demo.LogError("Send p2p message fail", "err", err)
-				}
-				demo.LogInfo("Sending handshake", "peer", p, "handshake", outmsg)
-			}()
+			// go func() {
+			outmsg := &OrderbookHandshake{
+				V: 42,
+				// shortened hex string for terminal logging
+				Nick: name,
+			}
+
+			// check handshake
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			hsCheck := checkProtoHandshake(outmsg.V)
+			_, err = pp.Handshake(ctx, outmsg, hsCheck)
+			if err != nil {
+				return err
+			}
+
+			err = pp.Send(outmsg)
+			if err != nil {
+				demo.LogError("Send p2p message fail", "err", err)
+			}
+			demo.LogInfo("Sending handshake", "peer", p, "handshake", outmsg)
+			// }()
 
 			// protocols abstraction provides a separate blocking run loop for the peer
 			// when this returns, the protocol will be terminated
@@ -165,7 +191,7 @@ func NewProtocol(inC <-chan interface{}, quitC <-chan struct{}, orderbookEngine 
 				InC:   inC,
 				QuitC: quitC,
 			}
-			err := pp.Run(run.handle)
+			err = pp.Run(run.handle)
 			return err
 		},
 	}

@@ -12,6 +12,7 @@ import (
 type OrderbookService struct {
 	V      int
 	Engine *orderbook.Engine
+	protos []p2p.Protocol
 }
 
 // APIs : api service
@@ -30,7 +31,7 @@ func (service *OrderbookService) APIs() []rpc.API {
 // these are needed to satisfy the node.Service interface
 // in this example they do nothing
 func (service *OrderbookService) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{}
+	return service.protos
 }
 
 func (service *OrderbookService) Start(srv *p2p.Server) error {
@@ -42,11 +43,18 @@ func (service *OrderbookService) Stop() error {
 }
 
 // wrapper function for servicenode to start the service
-func NewService(orderbookEngine *orderbook.Engine) func(ctx *node.ServiceContext) (node.Service, error) {
+func NewService(name string, inC <-chan interface{}, quitC <-chan struct{}, orderbookEngine *orderbook.Engine) func(ctx *node.ServiceContext) (node.Service, error) {
+	proto := NewProtocol(name, inC, quitC, orderbookEngine)
+	var protocolArr []p2p.Protocol
+	if proto != nil {
+		protocolArr = []p2p.Protocol{*proto}
+	}
+
 	return func(ctx *node.ServiceContext) (node.Service, error) {
 		return &OrderbookService{
 			V:      42,
 			Engine: orderbookEngine,
+			protos: protocolArr,
 		}, nil
 	}
 }

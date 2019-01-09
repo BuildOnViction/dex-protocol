@@ -19,7 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/p2p"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
@@ -326,6 +325,7 @@ func startup(p2pPort int, httpPort int, wsPort int, name string, privateKey stri
 	// register pss and orderbook service
 	rpcapi := []string{
 		// "eth",
+		// "ssh",
 		"orderbook",
 	}
 	dataDir := fmt.Sprintf("%s%d", demo.DatadirPrefix, p2pPort)
@@ -335,15 +335,11 @@ func startup(p2pPort int, httpPort int, wsPort int, name string, privateKey stri
 	}
 	orderbookEngine = orderbook.NewEngine(orderbookDir, allowedPairs)
 
-	proto := protocol.NewProtocol(msgC, quitC, orderbookEngine)
-	var protocolArr []p2p.Protocol
-	if proto != nil {
-		protocolArr = []p2p.Protocol{*proto}
-	}
-
-	thisNode, err = demo.NewServiceNodeWithPrivateKeyAndDataDirAndProtocols(privkey, dataDir, p2pPort, httpPort, wsPort, protocolArr, rpcapi...)
+	thisNode, err = demo.NewServiceNodeWithPrivateKeyAndDataDir(privkey, dataDir, p2pPort, httpPort, wsPort, rpcapi...)
 	// register normal service, protocol is for p2p, service is for rpc calls
-	err = thisNode.Register(protocol.NewService(orderbookEngine))
+	service := protocol.NewService(name, msgC, quitC, orderbookEngine)
+	err = thisNode.Register(service)
+
 	if err != nil {
 		demo.LogCrit("Register orderbook service in servicenode failed", "err", err)
 	}
