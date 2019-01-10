@@ -15,9 +15,9 @@ import (
 
 var (
 	OrderbookProtocol = &protocols.Spec{
-		Name:       demo.FooProtocolName,
-		Version:    demo.FooProtocolVersion,
-		MaxMsgSize: demo.FooProtocolMaxMsgSize,
+		Name:       "Orderbook",
+		Version:    42,
+		MaxMsgSize: 1024,
 		Messages: []interface{}{
 			&OrderbookHandshake{}, &OrderbookMsg{},
 		},
