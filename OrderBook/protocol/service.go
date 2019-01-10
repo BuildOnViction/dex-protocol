@@ -42,7 +42,7 @@ func (service *OrderbookService) Stop() error {
 	return nil
 }
 
-// wrapper function for servicenode to start the service
+// NewService: wrapper function for servicenode to start the service, both APIs and Protocols
 func NewService(name string, inC <-chan interface{}, quitC <-chan struct{}, orderbookEngine *orderbook.Engine) func(ctx *node.ServiceContext) (node.Service, error) {
 	proto := NewProtocol(name, inC, quitC, orderbookEngine)
 	var protocolArr []p2p.Protocol
