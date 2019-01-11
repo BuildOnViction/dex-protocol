@@ -49,12 +49,12 @@ var (
 	genesisPath     string
 	mining          bool
 	orderbookEngine *orderbook.Engine
+	nodeaddr        string
 )
 
 func initPrompt(privateKeyName string) {
 
 	// default value for node2 if using keystore1 and vice versa
-	var nodeaddr string
 	if privateKeyName == "keystore1" {
 		nodeaddr = "enode://ce24c4f944a0a3614b691d839a6a89339d17abac3d69c0d24e806db45d1bdbe7afa53c02136e5ad952f43e6e7285cd3971e367d8789f4eb7306770f5af78755d@127.0.0.1:30101?discport=0"
 	} else {
@@ -84,17 +84,17 @@ func initPrompt(privateKeyName string) {
 			Arguments:   orderArguments,
 			Description: "Process order and store on swarm network",
 		},
-		{
-			Name:        "publicKey",
-			Description: "Get public key",
-		},
-		{
-			Name: "addNode",
-			Arguments: []terminal.Argument{
-				{Name: "nodeaddr", Value: nodeaddr},
-			},
-			Description: "Add node to seed",
-		},
+		// {
+		// 	Name:        "publicKey",
+		// 	Description: "Get public key",
+		// },
+		// {
+		// 	Name: "addNode",
+		// 	Arguments: []terminal.Argument{
+		// 		{Name: "nodeaddr", Value: nodeaddr},
+		// 	},
+		// 	Description: "Add node to seed",
+		// },
 		{
 			Name:        "nodeAddr",
 			Description: "Get Node address",
@@ -200,10 +200,10 @@ func Start(p2pPort int, httpPort int, wsPort int, name string, privateKey string
 				// put message on channel
 				go processOrder(results)
 
-			case "addNode":
-				nodeaddr := results["nodeaddr"]
-				demo.LogInfo(fmt.Sprintf("-> Add node: %s\n", nodeaddr))
-				addNode(nodeaddr)
+			// case "addNode":
+			// 	nodeaddr := results["nodeaddr"]
+			// 	demo.LogInfo(fmt.Sprintf("-> Add node: %s\n", nodeaddr))
+			// 	addNode(nodeaddr)
 
 			case "nodeAddr":
 				demo.LogInfo(fmt.Sprintf("-> Node Address: %s\n", nodeAddr()))
@@ -337,7 +337,7 @@ func startup(p2pPort int, httpPort int, wsPort int, name string, privateKey stri
 
 	thisNode, err = demo.NewServiceNodeWithPrivateKeyAndDataDir(privkey, dataDir, p2pPort, httpPort, wsPort, rpcapi...)
 	// register normal service, protocol is for p2p, service is for rpc calls
-	service := protocol.NewService(name, msgC, quitC, orderbookEngine)
+	service := protocol.NewService(msgC, quitC, orderbookEngine)
 	err = thisNode.Register(service)
 
 	if err != nil {
@@ -356,7 +356,7 @@ func startup(p2pPort int, httpPort int, wsPort int, name string, privateKey stri
 	if err != nil {
 		demo.LogCrit("servicenode start failed", "err", err)
 	}
-
+	addNode(nodeaddr)
 }
 
 // geth init genesis.json --datadir .datadir

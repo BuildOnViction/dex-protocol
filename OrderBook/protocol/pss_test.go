@@ -2,15 +2,19 @@
 package protocol
 
 import (
+	"context"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/pss"
-
 	demo "github.com/tomochain/orderbook/common"
 )
 
@@ -86,14 +90,36 @@ var (
 	}
 )
 
+func TestPssKey(t *testing.T) {
+	rawurl := "enode://ce24c4f944a0a3614b691d839a6a89339d17abac3d69c0d24e806db45d1bdbe7afa53c02136e5ad952f43e6e7285cd3971e367d8789f4eb7306770f5af78755d@127.0.0.1:30101?discport=0"
+	publicKey := "04ce24c4f944a0a3614b691d839a6a89339d17abac3d69c0d24e806db45d1bdbe7afa53c02136e5ad952f43e6e7285cd3971e367d8789f4eb7306770f5af78755d"
+	bzzKey := "0x9984c9556ca87842c4ceb839518cd3648dc495d579f7af7f9ba49989bc207346"
+	newNode, _ := discover.ParseNode(rawurl)
+	pKey, _ := newNode.ID.Pubkey()
+	pKeyStr := common.Bytes2Hex(crypto.FromECDSAPub(pKey))
+	// pKey := "0x04" + newNode.ID.String()
+	if publicKey != pKeyStr {
+		t.Errorf("Want :%s, got %s", publicKey, pKeyStr)
+	}
+
+	// bzz is hash of full public key, not address (short of public key)
+	pubkey := crypto.FromECDSAPub(pKey)
+	expectedBzzKey := crypto.Keccak256Hash(pubkey).Hex()
+
+	if expectedBzzKey != bzzKey {
+		t.Errorf("Want :%s, got %s", bzzKey, expectedBzzKey)
+	}
+}
 func Test2PeersCommunicationPss(t *testing.T) {
 
 	// create two nodes
-	leftStack, err := demo.NewServiceNode(demo.P2pPort, 0, 0)
+	privkey1, _ := crypto.HexToECDSA("3411b45169aa5a8312e51357db68621031020dcf46011d7431db1bbb6d3922ce")
+	leftStack, err := demo.NewServiceNodeWithPrivateKey(privkey1, demo.P2pPort, 0, 0)
 	if err != nil {
 		demo.LogCrit(err.Error())
 	}
-	rightStack, err := demo.NewServiceNode(demo.P2pPort+1, 0, 0)
+	privkey2, _ := crypto.HexToECDSA("75c3e3150c0127af37e7e9df51430d36faa4c4660b6984c1edff254486d834e9")
+	rightStack, err := demo.NewServiceNodeWithPrivateKey(privkey2, demo.P2pPort+1, 0, 0)
 	if err != nil {
 		demo.LogCrit(err.Error())
 	}
@@ -103,13 +129,13 @@ func Test2PeersCommunicationPss(t *testing.T) {
 	protocolArr := []*p2p.Protocol{&proto}
 
 	// register the pss activated bzz services, using reference of slice so that we have modified list
-	leftSvc := demo.NewSwarmServiceWithProtocol(leftStack, demo.BzzDefaultPort, protocolSpecs, protocolArr, &topic, &pssprotos)
+	leftSvc := demo.NewSwarmServiceWithProtocolAndPrivateKey(leftStack, demo.BzzDefaultPort, protocolSpecs, protocolArr, &topic, &pssprotos, privkey1)
 	err = leftStack.Register(leftSvc)
 	if err != nil {
 		demo.LogCrit("servicenode 'left' pss register fail", "err", err)
 	}
 
-	rightSvc := demo.NewSwarmServiceWithProtocol(rightStack, demo.BzzDefaultPort+1, protocolSpecs, protocolArr, &topic, &pssprotos)
+	rightSvc := demo.NewSwarmServiceWithProtocolAndPrivateKey(rightStack, demo.BzzDefaultPort+1, protocolSpecs, protocolArr, &topic, &pssprotos, privkey2)
 	err = rightStack.Register(rightSvc)
 	if err != nil {
 		demo.LogCrit("servicenode 'right' pss register fail", "err", err)
@@ -151,10 +177,12 @@ func Test2PeersCommunicationPss(t *testing.T) {
 		demo.LogCrit("pss get pubkey fail", "err", err)
 	}
 	var rightBzzAddr string
-	err = rightRPCClient.Call(&rightBzzAddr, "pss_baseAddr")
+	err = leftRPCClient.Call(&rightBzzAddr, "pss_baseAddr")
 	if err != nil {
 		demo.LogCrit("pss get pubkey fail", "err", err)
 	}
+
+	demo.LogTrace("BaseAddr", "leftAddr", leftBzzAddr, "addrRight", rightBzzAddr)
 
 	// get the publickeys
 	var leftPubKey string
@@ -181,65 +209,68 @@ func Test2PeersCommunicationPss(t *testing.T) {
 		demo.LogCrit("pss set pubkey fail", "err", err)
 	}
 
-	// set up the event subscriptions on both nodes
-	eventC1 := make(chan *p2p.PeerEvent)
-	sub1 := leftStack.Server().SubscribeEvents(eventC1)
-	messageW.Add(1)
+	// // set up the event subscriptions on both nodes
+	// eventC1 := make(chan *p2p.PeerEvent)
+	// sub1 := leftStack.Server().SubscribeEvents(eventC1)
+	// messageW.Add(1)
+	// go func() {
+	// 	for {
+	// 		select {
+	// 		case peerevent := <-eventC1:
+	// 			if peerevent.Type == "add" {
+	// 				demo.LogDebug("Received peer add notification on node #1", "peer", peerevent.Peer)
+	// 			} else if peerevent.Type == "msgrecv" {
+	// 				demo.LogInfo("Received message nofification on node #1", "event", peerevent)
+	// 				messageW.Done()
+	// 			}
+	// 		case <-sub1.Err():
+	// 			return
+	// 		}
+	// 	}
+	// }()
+
+	// eventC2 := make(chan *p2p.PeerEvent)
+	// sub2 := rightStack.Server().SubscribeEvents(eventC2)
+	// messageW.Add(1)
+	// go func() {
+	// 	for {
+	// 		select {
+	// 		case peerevent := <-eventC2:
+	// 			if peerevent.Type == "add" {
+	// 				demo.LogDebug("Received peer add notification on node #2", "peer", peerevent.Peer)
+	// 			} else if peerevent.Type == "msgrecv" {
+	// 				demo.LogInfo("Received message nofification on node #2", "event", peerevent)
+	// 				messageW.Done()
+	// 			}
+	// 		case <-sub2.Err():
+	// 			return
+	// 		}
+	// 	}
+	// }()
+
+	// // wait for each respective message to be delivered on both sides
+	// messageW.Wait()
+
+	msgC := make(chan pss.APIMsg)
+	sub, err := rightRPCClient.Subscribe(context.Background(), "pss", msgC, "receive", topic)
+	// last one
+
+	// get the incoming message
 	go func() {
-		for {
-			select {
-			case peerevent := <-eventC1:
-				if peerevent.Type == "add" {
-					demo.LogDebug("Received peer add notification on node #1", "peer", peerevent.Peer)
-				} else if peerevent.Type == "msgrecv" {
-					demo.LogInfo("Received message nofification on node #1", "event", peerevent)
-					messageW.Done()
-				}
-			case <-sub1.Err():
-				return
-			}
+		ciphertext := hex.EncodeToString([]byte("hehe"))
+		err = leftRPCClient.Call(nil, "pss_sendRaw", rightBzzAddr, topic, ciphertext)
+		if err != nil {
+			demo.LogCrit("Pss send fail", "err", err)
 		}
 	}()
 
-	eventC2 := make(chan *p2p.PeerEvent)
-	sub2 := rightStack.Server().SubscribeEvents(eventC2)
-	messageW.Add(1)
-	go func() {
-		for {
-			select {
-			case peerevent := <-eventC2:
-				if peerevent.Type == "add" {
-					demo.LogDebug("Received peer add notification on node #2", "peer", peerevent.Peer)
-				} else if peerevent.Type == "msgrecv" {
-					demo.LogInfo("Received message nofification on node #2", "event", peerevent)
-					messageW.Done()
-				}
-			case <-sub2.Err():
-				return
-			}
-		}
-	}()
+	inmsg := <-msgC
+	fmt.Println("In message", inmsg.Msg)
 
-	// addpeer, discover now split into enode and discv5
-
-	nid := leftStack.Server().Self().ID
-	p := p2p.NewPeer(nid, nid.String(), []p2p.Cap{})
-	// add peer with right pubkey and name as left node address
-	pssprotos[0].AddPeer(p, topic, true, leftPubKey)
-	demo.LogWarn("Adding new peer", "peer", nid)
-
-	// pp := protocols.NewPeer(p, rw, &fooProtocol)
-
-	// pp.Send(ctx, &FooMsg{
-	// 	V: 47,
-	// })
-
-	// wait for each respective message to be delivered on both sides
-	messageW.Wait()
-
+	sub.Unsubscribe()
 	// terminate subscription loops and unsubscribe
-	sub1.Unsubscribe()
-	sub2.Unsubscribe()
+	// sub1.Unsubscribe()
+	// sub2.Unsubscribe()
 	rightRPCClient.Close()
 	leftRPCClient.Close()
 	rightStack.Stop()

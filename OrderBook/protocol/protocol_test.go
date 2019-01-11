@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -178,23 +179,17 @@ func (api *FooAPI) PongCount() (int, error) {
 	return *api.pongcount, nil
 }
 
-func TestPss(t *testing.T) {
-	rawurl := "enode://ce24c4f944a0a3614b691d839a6a89339d17abac3d69c0d24e806db45d1bdbe7afa53c02136e5ad952f43e6e7285cd3971e367d8789f4eb7306770f5af78755d@127.0.0.1:30101?discport=0"
-	publicKey := "0x04ce24c4f944a0a3614b691d839a6a89339d17abac3d69c0d24e806db45d1bdbe7afa53c02136e5ad952f43e6e7285cd3971e367d8789f4eb7306770f5af78755d"
-	newNode, _ := discover.ParseNode(rawurl)
-	pKey := "0x04" + newNode.ID.String()
-
-	t.Logf("Node ID :%t", publicKey == pKey)
-}
-
 func Test2PeersCommunication(t *testing.T) {
 
+	privkey1, _ := crypto.HexToECDSA("3411b45169aa5a8312e51357db68621031020dcf46011d7431db1bbb6d3922ce")
+
 	// create the two nodes
-	stack1, err := demo.NewServiceNode(demo.P2pPort, 0, 0)
+	stack1, err := demo.NewServiceNodeWithPrivateKey(privkey1, demo.P2pPort, 0, 0)
 	if err != nil {
 		demo.LogCrit("Create servicenode #1 fail", "err", err)
 	}
-	stack2, err := demo.NewServiceNode(demo.P2pPort+1, 0, 0)
+	privkey2, _ := crypto.HexToECDSA("75c3e3150c0127af37e7e9df51430d36faa4c4660b6984c1edff254486d834e9")
+	stack2, err := demo.NewServiceNodeWithPrivateKey(privkey2, demo.P2pPort+1, 0, 0)
 	if err != nil {
 		demo.LogCrit("Create servicenode #2 fail", "err", err)
 	}
