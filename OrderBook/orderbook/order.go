@@ -92,7 +92,7 @@ func (order *Order) UpdateQuantity(orderList *OrderList, newQuantity *big.Int, n
 	orderList.Item.Volume = Sub(orderList.Item.Volume, Sub(order.Item.Quantity, newQuantity))
 	order.Item.Timestamp = newTimestamp
 	order.Item.Quantity = CloneBigInt(newQuantity)
-	// fmt.Println("QUANTITY", order.Item.Quantity.String())
+	fmt.Println("QUANTITY", order.Item.Quantity.String())
 	orderList.SaveOrder(order)
 	orderList.Save()
 }

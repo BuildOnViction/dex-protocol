@@ -3,6 +3,7 @@ package protocol
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -22,7 +23,9 @@ var (
 		Version:    42,
 		MaxMsgSize: 1024,
 		Messages: []interface{}{
-			&OrderbookHandshake{}, &OrderbookMsg{},
+			&OrderbookHandshake{},
+			&OrderbookMsg{},
+			// &OrderbookCancelMsg{},
 		},
 	}
 
@@ -31,7 +34,7 @@ var (
 
 type OrderbookMsg struct {
 	PairName  string
-	ID        string
+	OrderID   string
 	Price     string
 	Quantity  string
 	Side      string
@@ -39,6 +42,14 @@ type OrderbookMsg struct {
 	TradeID   string
 	Type      string
 }
+
+// type OrderbookCancelMsg struct {
+// 	PairName  string
+// 	OrderID   string
+// 	Price     string
+// 	Side      string
+// 	Timestamp uint64
+// }
 
 func (msg *OrderbookMsg) ToQuote() map[string]string {
 	quote := make(map[string]string)
@@ -48,11 +59,21 @@ func (msg *OrderbookMsg) ToQuote() map[string]string {
 	quote["quantity"] = msg.Quantity
 	quote["price"] = msg.Price
 	quote["trade_id"] = msg.TradeID
-	quote["pairName"] = msg.PairName
+	quote["pair_name"] = msg.PairName
 	// if insert id is not used, just for update
-	quote["id"] = msg.ID
+	quote["order_id"] = msg.OrderID
 	return quote
 }
+
+// func (msg *OrderbookCancelMsg) ToQuote() map[string]string {
+// 	quote := make(map[string]string)
+// 	quote["timestamp"] = strconv.FormatUint(msg.Timestamp, 10)
+// 	quote["side"] = msg.Side
+// 	quote["price"] = msg.Price
+// 	quote["pair_name"] = msg.PairName
+// 	quote["order_id"] = msg.OrderID
+// 	return quote
+// }
 
 func NewOrderbookMsg(quote map[string]string) (*OrderbookMsg, error) {
 	timestamp, err := strconv.ParseUint(quote["timestamp"], 10, 64)
@@ -63,10 +84,21 @@ func NewOrderbookMsg(quote map[string]string) (*OrderbookMsg, error) {
 		Quantity:  quote["quantity"],
 		Price:     quote["price"],
 		TradeID:   quote["trade_id"],
-		PairName:  quote["pairName"],
-		ID:        quote["id"],
+		PairName:  quote["pair_name"],
+		OrderID:   quote["order_id"],
 	}, err
 }
+
+// func NewOrderbookCancelMsg(quote map[string]string) (*OrderbookCancelMsg, error) {
+// 	timestamp, err := strconv.ParseUint(quote["timestamp"], 10, 64)
+// 	return &OrderbookCancelMsg{
+// 		Timestamp: timestamp,
+// 		Side:      quote["side"],
+// 		Price:     quote["price"],
+// 		PairName:  quote["pair_name"],
+// 		OrderID:   quote["order_id"],
+// 	}, err
+// }
 
 type OrderbookHandshake struct {
 	Nick string
@@ -84,9 +116,9 @@ type OrderbookHandler struct {
 // checkProtoHandshake verifies local and remote protoHandshakes match
 func checkProtoHandshake(testVersion uint) func(interface{}) error {
 	return func(rhs interface{}) error {
-		remote := rhs.(*OrderbookHandshake)
+		remote, ok := rhs.(*OrderbookHandshake)
 
-		if remote.V != testVersion {
+		if ok && remote.V != testVersion {
 			return fmt.Errorf("%d (!= %d)", remote.V, testVersion)
 		}
 		return nil
@@ -94,7 +126,10 @@ func checkProtoHandshake(testVersion uint) func(interface{}) error {
 }
 
 func (orderbookHandler *OrderbookHandler) handleOrderbookMsg(message *OrderbookMsg) error {
-	demo.LogDebug("Received orderbook", "orderbook", message, "peer", orderbookHandler.Peer)
+	if message.TradeID == "" {
+		return orderbookHandler.handleOrderbookCancelMsg(message)
+	}
+	demo.LogDebug("Received order", "order", message, "peer", orderbookHandler.Peer)
 
 	// add Order
 	payload := message.ToQuote()
@@ -102,6 +137,18 @@ func (orderbookHandler *OrderbookHandler) handleOrderbookMsg(message *OrderbookM
 
 	trades, orderInBook := orderbookHandler.Engine.ProcessOrder(payload)
 	demo.LogInfo("Orderbook result", "Trade", trades, "OrderInBook", orderInBook)
+	return nil
+}
+
+func (orderbookHandler *OrderbookHandler) handleOrderbookCancelMsg(message *OrderbookMsg) error {
+	demo.LogDebug("Received cancel order", "cancel_order", message, "peer", orderbookHandler.Peer)
+
+	// cancel Order
+	payload := message.ToQuote()
+	demo.LogInfo("-> Cancel order", "payload", payload)
+
+	err := orderbookHandler.Engine.CancelOrder(payload)
+	demo.LogInfo("Orderbook result", "err", err)
 	return nil
 }
 
@@ -139,11 +186,13 @@ func (orderbookHandler *OrderbookHandler) handle(msg interface{}) error {
 
 	// we got message or handshake
 
-	demo.LogWarn("Inbout", "inbout", orderbookHandler.Peer.Inbound())
+	// demo.LogWarn("Inbout", "inbout", orderbookHandler.Peer.Inbound())
 
 	switch messageType := msg.(type) {
 	case *OrderbookMsg:
 		return orderbookHandler.handleOrderbookMsg(msg.(*OrderbookMsg))
+	// case *OrderbookCancelMsg:
+	// 	return orderbookHandler.handleOrderbookCancelMsg(msg.(*OrderbookCancelMsg))
 	case *OrderbookHandshake:
 		return orderbookHandler.handleOrderbookHandshake(msg.(*OrderbookHandshake))
 	default:
@@ -158,11 +207,11 @@ func NewProtocol(inC <-chan interface{}, quitC <-chan struct{}, orderbookEngine 
 		Name:    "Orderbook",
 		Version: 42,
 		// we may use more 1 custom message code
-		Length: uint64(len(OrderbookProtocol.Messages)) + 1,
+		Length: uint64(len(OrderbookProtocol.Messages)),
 		// Length: 2,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
-			demo.LogWarn("running", "peer", p)
+			// demo.LogWarn("running", "peer", p)
 
 			var err error
 			// create the enhanced peer, it will wrap p2p.Send with code from Message Spec
@@ -176,14 +225,18 @@ func NewProtocol(inC <-chan interface{}, quitC <-chan struct{}, orderbookEngine 
 					Nick: p.Name(),
 				}
 
-				// // check handshake
+				// check handshake, should sleep a little bit before sending handshake so that
+				// we can run handle first
 				// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				// defer cancel()
 				// hsCheck := checkProtoHandshake(outmsg.V)
 				// _, err = pp.Handshake(ctx, outmsg, hsCheck)
 				// if err != nil {
-				// 	return err
+				// 	return
 				// }
+
+				// sleep a second
+				time.Sleep(time.Second)
 
 				err = pp.Send(outmsg)
 				if err != nil {

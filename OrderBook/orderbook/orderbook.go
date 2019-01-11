@@ -389,15 +389,16 @@ func (orderBook *OrderBook) processOrderList(side string, orderList *OrderList, 
 	return quantityToTrade, trades
 }
 
-// CancelOrder : cancel the order
-func (orderBook *OrderBook) CancelOrder(side string, orderID int, price *big.Int) {
+// CancelOrder : cancel the order, just need ID, side and price, of course order must belong
+// to a price point as well
+func (orderBook *OrderBook) CancelOrder(side string, orderID uint64, price *big.Int) error {
 	orderBook.UpdateTime()
 	key := GetKeyFromBig(big.NewInt(int64(orderID)))
-
+	var err error
 	if side == Bid {
 		order := orderBook.Bids.GetOrder(key, price)
 		if order != nil {
-			orderBook.Bids.RemoveOrder(order)
+			_, err = orderBook.Bids.RemoveOrder(order)
 		}
 		// if orderBook.Bids.OrderExist(key, price) {
 		// 	orderBook.Bids.RemoveOrder(order)
@@ -406,27 +407,42 @@ func (orderBook *OrderBook) CancelOrder(side string, orderID int, price *big.Int
 
 		order := orderBook.Asks.GetOrder(key, price)
 		if order != nil {
-			orderBook.Asks.RemoveOrder(order)
+			_, err = orderBook.Asks.RemoveOrder(order)
 		}
 
 		// if orderBook.Asks.OrderExist(key) {
 		// 	orderBook.Asks.RemoveOrder(order)
 		// }
 	}
+
+	return err
+}
+
+func (orderBook *OrderBook) UpdateOrder(quoteUpdate map[string]string) error {
+	orderID, err := strconv.ParseUint(quoteUpdate["order_id"], 10, 64)
+	if err == nil {
+		price, ok := new(big.Int).SetString(quoteUpdate["price"], 10)
+		if !ok {
+			return fmt.Errorf("Price is not correct :%s", quoteUpdate["price"])
+		}
+
+		return orderBook.ModifyOrder(quoteUpdate, orderID, price)
+	}
+	return err
 }
 
 // ModifyOrder : modify the order
-func (orderBook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID int, price *big.Int) {
+func (orderBook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID uint64, price *big.Int) error {
 	orderBook.UpdateTime()
 
 	side := quoteUpdate["side"]
-	quoteUpdate["order_id"] = strconv.Itoa(orderID)
+	quoteUpdate["order_id"] = strconv.FormatUint(orderID, 10)
 	quoteUpdate["timestamp"] = strconv.FormatUint(orderBook.Item.Timestamp, 10)
 	key := GetKeyFromBig(ToBigInt(quoteUpdate["order_id"]))
 	if side == Bid {
 
 		if orderBook.Bids.OrderExist(key, price) {
-			orderBook.Bids.UpdateOrder(quoteUpdate)
+			return orderBook.Bids.UpdateOrder(quoteUpdate)
 		}
 		// if orderBook.Bids.OrderExist(key) {
 		// 	orderBook.Bids.UpdateOrder(quoteUpdate)
@@ -434,9 +450,11 @@ func (orderBook *OrderBook) ModifyOrder(quoteUpdate map[string]string, orderID i
 	} else {
 
 		if orderBook.Asks.OrderExist(key, price) {
-			orderBook.Asks.UpdateOrder(quoteUpdate)
+			return orderBook.Asks.UpdateOrder(quoteUpdate)
 		}
 	}
+
+	return nil
 }
 
 // VolumeAtPrice : get volume at the current price

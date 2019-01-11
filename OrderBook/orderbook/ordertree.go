@@ -343,7 +343,7 @@ func (orderTree *OrderTree) InsertOrder(quote map[string]string) error {
 }
 
 // UpdateOrder : update an order
-func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
+func (orderTree *OrderTree) UpdateOrder(quote map[string]string) error {
 	// order := orderTree.OrderMap[quote["order_id"]]
 
 	price := ToBigInt(quote["price"])
@@ -382,7 +382,7 @@ func (orderTree *OrderTree) UpdateOrder(quote map[string]string) {
 	orderTree.Item.Volume = Add(orderTree.Item.Volume, Sub(order.Item.Quantity, originalQuantity))
 
 	// should use batch to optimize the performance
-	orderTree.Save()
+	return orderTree.Save()
 }
 
 func (orderTree *OrderTree) RemoveOrderFromOrderList(order *Order, orderList *OrderList) error {

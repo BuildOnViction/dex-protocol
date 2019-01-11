@@ -61,9 +61,15 @@ func initPrompt(privateKeyName string) {
 		nodeaddr = "enode://655b231711df566a1bbf8f62dd0abaad71a1baa2c4bc865cae1691431bff2d9185fb66c99b982e20fd0fd562ced2c1ced96bd3e1daba0235870dfce0663a3483@127.0.0.1:30100?discport=0"
 	}
 
+	cancelOrderArguments := []terminal.Argument{
+		{Name: "order_id", Value: "1"},
+		{Name: "pair_name", Value: "TOMO/WETH"},
+		{Name: "side", Value: orderbook.Ask},
+		{Name: "price", Value: "100"},
+	}
+
 	orderArguments := []terminal.Argument{
-		{Name: "id", Value: "1"},
-		{Name: "pairName", Value: "TOMO/WETH"},
+		{Name: "pair_name", Value: "TOMO/WETH"},
 		{Name: "type", Value: "limit"},
 		{Name: "side", Value: orderbook.Ask},
 		{Name: "quantity", Value: "10"},
@@ -77,24 +83,27 @@ func initPrompt(privateKeyName string) {
 		{Name: "trade_id", Value: "1"},
 	}
 
+	updateOrderArguments := append([]terminal.Argument{
+		{Name: "order_id", Value: "1"},
+	}, orderArguments...)
+
 	// init prompt commands
 	commands = []terminal.Command{
 		{
-			Name:        "processOrder",
+			Name:        "addOrder",
 			Arguments:   orderArguments,
-			Description: "Process order and store on swarm network",
+			Description: "Add order",
 		},
-		// {
-		// 	Name:        "publicKey",
-		// 	Description: "Get public key",
-		// },
-		// {
-		// 	Name: "addNode",
-		// 	Arguments: []terminal.Argument{
-		// 		{Name: "nodeaddr", Value: nodeaddr},
-		// 	},
-		// 	Description: "Add node to seed",
-		// },
+		{
+			Name:        "updateOrder",
+			Arguments:   updateOrderArguments,
+			Description: "Update order, order_id must greater than 0",
+		},
+		{
+			Name:        "cancelOrder",
+			Arguments:   cancelOrderArguments,
+			Description: "Cancel order, order_id must greater than 0",
+		},
 		{
 			Name:        "nodeAddr",
 			Description: "Get Node address",
@@ -195,15 +204,19 @@ func Start(p2pPort int, httpPort int, wsPort int, name string, privateKey string
 
 			// process command
 			switch command.Name {
-			case "processOrder":
+			case "addOrder":
 				demo.LogInfo("-> Add order", "payload", results)
 				// put message on channel
+				results["order_id"] = "0"
 				go processOrder(results)
-
-			// case "addNode":
-			// 	nodeaddr := results["nodeaddr"]
-			// 	demo.LogInfo(fmt.Sprintf("-> Add node: %s\n", nodeaddr))
-			// 	addNode(nodeaddr)
+			case "updateOrder":
+				demo.LogInfo("-> Update order", "payload", results)
+				// put message on channel
+				go processOrder(results)
+			case "cancelOrder":
+				demo.LogInfo("-> Cancel order", "payload", results)
+				// put message on channel
+				go cancelOrder(results)
 
 			case "nodeAddr":
 				demo.LogInfo(fmt.Sprintf("-> Node Address: %s\n", nodeAddr()))
@@ -261,7 +274,25 @@ func processOrder(payload map[string]string) error {
 
 	}
 
-	return nil
+	return err
+}
+
+func cancelOrder(payload map[string]string) error {
+	// add order at this current node first
+	// get timestamp in milliseconds
+	payload["timestamp"] = strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10)
+	msg, err := protocol.NewOrderbookMsg(payload)
+	if err == nil {
+		// try to store into model, if success then process at local and broad cast
+		err := orderbookEngine.CancelOrder(payload)
+		demo.LogInfo("Orderbook cancel result", "err", err, "msg", msg)
+
+		// broad cast message
+		msgC <- msg
+
+	}
+
+	return err
 }
 
 func updateEthService() {

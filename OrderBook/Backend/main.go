@@ -77,8 +77,8 @@ func initPrompt() {
 		{
 			Name: "getOrder",
 			Arguments: []terminal.Argument{
-				{Name: "pairName", Value: "TOMO/WETH"},
-				{Name: "orderID", Value: "1"},
+				{Name: "pair_name", Value: "TOMO/WETH"},
+				{Name: "order_id", Value: "1"},
 			},
 			Description: "Get the order from the orderbook storgae",
 		},
@@ -132,14 +132,14 @@ func initPrompt() {
 		{
 			Name: "getBestAskList",
 			Arguments: []terminal.Argument{
-				{Name: "pairName", Value: "TOMO/WETH"},
+				{Name: "pair_name", Value: "TOMO/WETH"},
 			},
 			Description: "Get best ask list",
 		},
 		{
 			Name: "getBestBidList",
 			Arguments: []terminal.Argument{
-				{Name: "pairName", Value: "TOMO/WETH"},
+				{Name: "pair_name", Value: "TOMO/WETH"},
 			},
 			Description: "Get best bid list",
 		},
@@ -241,9 +241,9 @@ func Start() error {
 				demo.LogInfo("-> Update", "wsPort", results["wsPort"])
 				wsPort = results["wsPort"]
 			case "getOrder":
-				demo.LogInfo("-> Get orders", "pairName", results["pairName"], "orderID", results["orderID"])
+				demo.LogInfo("-> Get orders", "pair_name", results["pair_name"], "order_id", results["order_id"])
 				// put message on channel
-				callRPC(result, "orderbook_getOrder", results["pairName"], results["orderID"])
+				callRPC(result, "orderbook_getOrder", results["pair_name"], results["order_id"])
 			// case "updateOrder":
 			// level, _ := strconv.ParseUint(results["level"], 10, 8)
 			// time, _ := strconv.ParseUint(results["time"], 10, 64)
@@ -253,10 +253,10 @@ func Start() error {
 			// logResult(result, err)
 			case "getBestAskList":
 				demo.LogInfo("-> Best ask list:")
-				callRPC(result, "orderbook_getBestAskList", results["pairName"])
+				callRPC(result, "orderbook_getBestAskList", results["pair_name"])
 			case "getBestBidList":
 				demo.LogInfo("-> Best bid list:")
-				callRPC(result, "orderbook_getBestBidList", results["pairName"])
+				callRPC(result, "orderbook_getBestBidList", results["pair_name"])
 			default:
 				demo.LogInfo(fmt.Sprintf("-> Unknown command: %s\n", command.Name))
 			}

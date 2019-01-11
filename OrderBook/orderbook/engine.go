@@ -3,7 +3,10 @@ package orderbook
 import (
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
+
+	demo "github.com/tomochain/orderbook/common"
 )
 
 // Engine : singleton orderbook for testing
@@ -80,15 +83,47 @@ func (engine *Engine) GetOrder(pairName, orderID string) *Order {
 
 func (engine *Engine) ProcessOrder(quote map[string]string) ([]map[string]string, map[string]string) {
 
-	ob, _ := engine.getAndCreateIfNotExisted(quote["pairName"])
+	ob, _ := engine.getAndCreateIfNotExisted(quote["pair_name"])
 	var trades []map[string]string
 	var orderInBook map[string]string
 
 	if ob != nil {
 		// get map as general input, we can set format later to make sure there is no problem
-		trades, orderInBook = ob.ProcessOrder(quote, true)
+		orderID, err := strconv.ParseUint(quote["order_id"], 10, 64)
+		if err == nil {
+			// insert
+			if orderID == 0 {
+				demo.LogInfo("Process order")
+				trades, orderInBook = ob.ProcessOrder(quote, true)
+			} else {
+				demo.LogInfo("Update order")
+				err = ob.UpdateOrder(quote)
+				if err != nil {
+					demo.LogInfo("Update order failed", "quote", quote, "err", err)
+				}
+			}
+		}
+
 	}
 
 	return trades, orderInBook
 
+}
+
+func (engine *Engine) CancelOrder(quote map[string]string) error {
+	ob, err := engine.getAndCreateIfNotExisted(quote["pair_name"])
+	if ob != nil {
+		orderID, err := strconv.ParseUint(quote["order_id"], 10, 64)
+		if err == nil {
+
+			price, ok := new(big.Int).SetString(quote["price"], 10)
+			if !ok {
+				return fmt.Errorf("Price is not correct :%s", quote["price"])
+			}
+
+			return ob.CancelOrder(quote["side"], orderID, price)
+		}
+	}
+
+	return err
 }
