@@ -10,4 +10,4 @@ Node2: `yarn node2 -mining true`
 Backend: `yarn backend`
 
 **DEMO**  
-![demo](./sync.png)
+![demo](./demo.png)
