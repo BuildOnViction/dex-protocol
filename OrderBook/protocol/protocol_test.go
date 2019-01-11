@@ -178,6 +178,15 @@ func (api *FooAPI) PongCount() (int, error) {
 	return *api.pongcount, nil
 }
 
+func TestPss(t *testing.T) {
+	rawurl := "enode://ce24c4f944a0a3614b691d839a6a89339d17abac3d69c0d24e806db45d1bdbe7afa53c02136e5ad952f43e6e7285cd3971e367d8789f4eb7306770f5af78755d@127.0.0.1:30101?discport=0"
+	publicKey := "0x04ce24c4f944a0a3614b691d839a6a89339d17abac3d69c0d24e806db45d1bdbe7afa53c02136e5ad952f43e6e7285cd3971e367d8789f4eb7306770f5af78755d"
+	newNode, _ := discover.ParseNode(rawurl)
+	pKey := "0x04" + newNode.ID.String()
+
+	t.Logf("Node ID :%t", publicKey == pKey)
+}
+
 func Test2PeersCommunication(t *testing.T) {
 
 	// create the two nodes
