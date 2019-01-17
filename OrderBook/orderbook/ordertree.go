@@ -9,10 +9,11 @@ import (
 )
 
 type OrderTreeItem struct {
-	Volume       *big.Int `json:"volume"`       // Contains total quantity from all Orders in tree
-	NumOrders    uint64   `json:"numOrders"`    // Contains count of Orders in tree
-	Depth        uint64   `json:"depth"`        // Number of different prices in tree (http://en.wikipedia.org/wiki/Order_book_(trading)#Book_depth)
-	PriceTreeKey []byte   `json:"priceTreeKey"` // Root Key of price tree
+	Volume        *big.Int `json:"volume"`        // Contains total quantity from all Orders in tree
+	NumOrders     uint64   `json:"numOrders"`     // Contains count of Orders in tree
+	Depth         uint64   `json:"depth"`         // Number of different prices in tree (http://en.wikipedia.org/wiki/Order_book_(trading)#Book_depth)
+	PriceTreeKey  []byte   `json:"priceTreeKey"`  // Root Key of price tree
+	PriceTreeSize uint64   `json:"priceTreeSize"` // Number of nodes
 }
 
 // OrderTree : order tree structure for travelling
@@ -30,7 +31,7 @@ type OrderTree struct {
 }
 
 // NewOrderTree create new order tree
-func NewOrderTree(orderDB *BatchDatabase, key []byte) *OrderTree {
+func NewOrderTree(orderDB *BatchDatabase, key []byte, orderBook *OrderBook) *OrderTree {
 	// create priceTree from db for order list
 	// orderListDBPath := path.Join(datadir, "pricetree")
 	// orderDBPath := path.Join(datadir, "order")
@@ -55,6 +56,7 @@ func NewOrderTree(orderDB *BatchDatabase, key []byte) *OrderTree {
 		Key:       key,
 		slot:      slot,
 		Item:      item,
+		orderBook: orderBook,
 		// orderListCache: itemCache,
 	}
 
@@ -79,10 +81,11 @@ func (orderTree *OrderTree) Save() error {
 	// commit tree changes
 	// orderTree.PriceTree.Commit()
 
-	// update tree meta information
+	// update tree meta information, make sure item existed instead of checking rootKey
 	priceTreeRoot := orderTree.PriceTree.Root()
 	if priceTreeRoot != nil {
 		orderTree.Item.PriceTreeKey = priceTreeRoot.Key
+		orderTree.Item.PriceTreeSize = orderTree.PriceTree.Size()
 	}
 
 	// using rlp.EncodeToBytes as underlying encode method
@@ -99,6 +102,15 @@ func (orderTree *OrderTree) Save() error {
 	// return orderTree.OrderDB.Put(OrderTreeKey, ordertreeBytes)
 }
 
+// save this tree information then do database commit
+func (orderTree *OrderTree) Commit() error {
+	err := orderTree.Save()
+	if err == nil {
+		err = orderTree.orderDB.Commit()
+	}
+	return err
+}
+
 func (orderTree *OrderTree) Restore() error {
 	// val.(*OrderTreeItem)
 	val, err := orderTree.orderDB.Get(orderTree.Key, orderTree.Item)
@@ -110,7 +122,7 @@ func (orderTree *OrderTree) Restore() error {
 		orderTree.Item = val.(*OrderTreeItem)
 
 		// update root key for pricetree
-		orderTree.PriceTree.SetRootKey(orderTree.Item.PriceTreeKey)
+		orderTree.PriceTree.SetRootKey(orderTree.Item.PriceTreeKey, orderTree.Item.PriceTreeSize)
 	}
 
 	return err
@@ -118,9 +130,9 @@ func (orderTree *OrderTree) Restore() error {
 
 func (orderTree *OrderTree) String(startDepth int) string {
 	tabs := strings.Repeat("\t", startDepth)
-	return fmt.Sprintf("{\n\t%sMinPriceList: %s\n\t%sMaxPriceList: %s\n\t%sVolume: %v\n\t%sNumOrders: %d\n\t%sDepth: %d\n%s}",
+	return fmt.Sprintf("{\n\t%sMinPriceList: %s\n\t%sMaxPriceList: %s\n\t%sVolume: %v\n\t%sNumOrders: %d\n\t%sDepth: %d\n\t%sTreeSize: %d\n%s}",
 		tabs, orderTree.MinPriceList().String(startDepth+1), tabs, orderTree.MaxPriceList().String(startDepth+1), tabs,
-		orderTree.Item.Volume, tabs, orderTree.Item.NumOrders, tabs, orderTree.Item.Depth, tabs)
+		orderTree.Item.Volume, tabs, orderTree.Item.NumOrders, tabs, orderTree.Item.Depth, tabs, orderTree.Item.PriceTreeSize, tabs)
 }
 
 func (orderTree *OrderTree) Length() uint64 {

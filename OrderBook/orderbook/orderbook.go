@@ -81,10 +81,8 @@ func NewOrderBook(name string, db *BatchDatabase) *OrderBook {
 		Key:  key,
 	}
 
-	bids := NewOrderTree(db, bidsKey)
-	asks := NewOrderTree(db, asksKey)
-	bids.orderBook = orderBook
-	asks.orderBook = orderBook
+	bids := NewOrderTree(db, bidsKey, orderBook)
+	asks := NewOrderTree(db, asksKey, orderBook)
 
 	// set asks and bids
 	orderBook.Bids = bids

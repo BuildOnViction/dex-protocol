@@ -89,6 +89,7 @@ func NewOrderListWithItem(item *OrderListItem, orderTree *OrderTree) *OrderList 
 func (orderList *OrderList) GetOrder(key []byte) *Order {
 	// re-use method from orderbook, because orderlist has the same slot as orderbook
 	return orderList.orderTree.orderBook.GetOrder(key)
+
 	// if orderList.isEmptyKey(key) {
 	// 	return nil
 	// }

@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	rbt "github.com/tomochain/orderbook/redblacktree"
+	// rbt "github.com/tomochain/orderbook/redblacktree"
 )
 
 func print(tree *RedBlackTreeExtended, t *testing.T) {
@@ -24,7 +24,7 @@ func TestLevelDB(t *testing.T) {
 	obdb, _ := ethdb.NewLDBDatabase(datadir, 0, 0)
 	// obdb.Put([]byte("1"), []byte("a"))
 	value, _ := obdb.Get([]byte("2"))
-	item := &rbt.Item{}
+	item := &Item{}
 	rlp.DecodeBytes(value, item)
 	t.Logf("value :%x, items : %x", value, item.Value)
 }
@@ -73,7 +73,7 @@ func TestManipulateLevelDBTree(t *testing.T) {
 func TestRestoreLevelDBTree(t *testing.T) {
 	tree := NewRedBlackTreeExtended(testDB)
 
-	tree.SetRootKey(getBig("2"))
+	tree.SetRootKey(getBig("2"), 5)
 
 	print(tree, t)
 }

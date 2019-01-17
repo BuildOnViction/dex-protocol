@@ -3,14 +3,15 @@ package orderbook
 var datadir = "../datadir/testing"
 
 // var datadir = "../../.data_30100/orderbook/"
+// orderbook for this pair
+var pairName = "TOMO/WETH"
 
 // override Encode and Decode for better performance
 var testDB = NewBatchDatabaseWithEncode(datadir, 0, 0, EncodeBytesItem, DecodeBytesItem)
+var testOrderBook = NewOrderBook(pairName, testDB)
 
-var testOrderTree = NewOrderTree(testDB, []byte("ordertree"))
-
-// orderbook for this pair
-var pairName = "TOMO/WETH"
+// order tree without orderbook
+var testOrderTree = NewOrderTree(testDB, []byte("ordertree"), testOrderBook)
 
 var testTimestamp uint64 = 123452342343
 var testQuanity = ToBigInt("1000")

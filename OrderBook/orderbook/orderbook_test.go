@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewOrderBook(t *testing.T) {
-	orderBook := NewOrderBook(pairName, testDB)
+	orderBook := testOrderBook
 	// // try to restore before next operation
 	// orderBook.Restore()
 
@@ -31,7 +31,7 @@ func TestNewOrderBook(t *testing.T) {
 }
 
 func TestOrderBook(t *testing.T) {
-	orderBook := NewOrderBook(pairName, testDB)
+	orderBook := testOrderBook
 	orderBook.Restore()
 
 	limitOrders := make([]map[string]string, 0)
@@ -152,11 +152,13 @@ func TestOrderBook(t *testing.T) {
 
 	trades, orderInBook = orderBook.ProcessOrder(marketOrder, true)
 
-	tradedPrice := trades[0]["price"]
-	tradedQuantity := trades[0]["quantity"]
+	if len(trades) > 0 {
+		tradedPrice := trades[0]["price"]
+		tradedQuantity := trades[0]["quantity"]
 
-	if !(tradedPrice == "101" && tradedQuantity == "2" && len(orderInBook) == 0) {
-		t.Errorf("orderBook.ProcessOrder incorrect")
+		if !(tradedPrice == "101" && tradedQuantity == "2" && len(orderInBook) == 0) {
+			t.Errorf("orderBook.ProcessOrder incorrect")
+		}
 	}
 
 	// t.Logf("\nOrderBook :%s", orderBook.String(0))
@@ -207,7 +209,7 @@ func TestOrderBook(t *testing.T) {
 }
 
 func TestOrderBookRestore(t *testing.T) {
-	orderBook := NewOrderBook(pairName, testDB)
+	orderBook := testOrderBook
 	orderBook.SetDebug(true)
 
 	orderBook.Restore()

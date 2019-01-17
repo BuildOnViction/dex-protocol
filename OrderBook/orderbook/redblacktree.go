@@ -18,7 +18,7 @@ type Tree struct {
 	// cache   map[string]*Item
 	// Debug bool
 	// itemCache *lru.Cache // Cache for the recent node item
-	// size       int
+	size       uint64
 	Comparator Comparator
 	// EncodeToBytes EncodeToBytes
 	// DecodeBytes   DecodeBytes
@@ -62,13 +62,14 @@ func (tree *Tree) IsEmptyKey(key []byte) bool {
 	return tree.db.IsEmptyKey(key)
 }
 
-func (tree *Tree) SetRootKey(key []byte) {
+func (tree *Tree) SetRootKey(key []byte, size uint64) {
 	// root, err := tree.GetNode(key)
 	// tree.Root = root
 	// // bytes, _ := json.Marshal(root)
 	// // fmt.Println(string(bytes))
 	// return err
 	tree.rootKey = key
+	tree.size = size
 }
 
 // Put inserts node into the tree.
@@ -133,8 +134,8 @@ func (tree *Tree) Put(key []byte, value []byte) error {
 	tree.insertCase1(insertedNode)
 	tree.Save(insertedNode)
 
-	fmt.Println(tree)
-	// tree.size++
+	// fmt.Println(tree)
+	tree.size++
 	return nil
 }
 
@@ -249,38 +250,38 @@ func (tree *Tree) Remove(key []byte) {
 		}
 	}
 
-	// tree.size--
+	tree.size--
 }
 
 // // Empty returns true if tree does not contain any nodes
-// func (tree *Tree) Empty() bool {
-// 	return tree.size == 0
-// }
+func (tree *Tree) Empty() bool {
+	return tree.size == 0
+}
 
-// // Size returns number of nodes in the tree.
-// func (tree *Tree) Size() int {
-// 	return tree.size
-// }
+// Size returns number of nodes in the tree.
+func (tree *Tree) Size() uint64 {
+	return tree.size
+}
 
-// // Keys returns all keys in-order
-// func (tree *Tree) Keys() [][]byte {
-// 	keys := make([][]byte, tree.size)
-// 	it := tree.Iterator()
-// 	for i := 0; it.Next(); i++ {
-// 		keys[i] = it.Key()
-// 	}
-// 	return keys
-// }
+// Keys returns all keys in-order
+func (tree *Tree) Keys() [][]byte {
+	keys := make([][]byte, tree.size)
+	it := tree.Iterator()
+	for i := 0; it.Next(); i++ {
+		keys[i] = it.Key()
+	}
+	return keys
+}
 
-// // Values returns all values in-order based on the key.
-// func (tree *Tree) Values() [][]byte {
-// 	values := make([][]byte, tree.size)
-// 	it := tree.Iterator()
-// 	for i := 0; it.Next(); i++ {
-// 		values[i] = it.Value()
-// 	}
-// 	return values
-// }
+// Values returns all values in-order based on the key.
+func (tree *Tree) Values() [][]byte {
+	values := make([][]byte, tree.size)
+	it := tree.Iterator()
+	for i := 0; it.Next(); i++ {
+		values[i] = it.Value()
+	}
+	return values
+}
 
 // Left returns the left-most (min) node or nil if tree is empty.
 func (tree *Tree) Left() *Node {
@@ -362,15 +363,16 @@ func (tree *Tree) Ceiling(key []byte) (ceiling *Node, found bool) {
 	return nil, false
 }
 
-// // Clear removes all nodes from the tree.
-// func (tree *Tree) Clear() {
-// 	tree.Root = nil
-// 	tree.size = 0
-// }
+// Clear removes all nodes from the tree.
+// we do not delete other children, but update them by overriding later
+func (tree *Tree) Clear() {
+	tree.rootKey = EmptyKey()
+	tree.size = 0
+}
 
 // String returns a string representation of container
 func (tree *Tree) String() string {
-	str := "RedBlackTree\n"
+	str := fmt.Sprintf("RedBlackTree, size: %d\n", tree.size)
 
 	// if !tree.Empty() {
 	output(tree, tree.Root(), "", true, &str)
@@ -628,27 +630,28 @@ func (tree *Tree) Save(node *Node) error {
 	// return tree.db.Put(node.Key, value)
 }
 
-// func (tree *Tree) Commit() error {
-// 	// return tree.batch.Write()
-// 	batch := tree.db.NewBatch()
-// 	for cacheKey, item := range tree.cache {
-// 		value, err := tree.EncodeToBytes(item)
-// 		if err != nil {
-// 			fmt.Println(err)
-// 			return err
-// 		}
-// 		key := common.Hex2Bytes(cacheKey)
-// 		batch.Put(key, value)
+func (tree *Tree) Commit() error {
+	return tree.db.Commit()
+	// return tree.batch.Write()
+	// batch := tree.db.NewBatch()
+	// for cacheKey, item := range tree.cache {
+	// 	value, err := tree.EncodeToBytes(item)
+	// 	if err != nil {
+	// 		fmt.Println(err)
+	// 		return err
+	// 	}
+	// 	key := common.Hex2Bytes(cacheKey)
+	// 	batch.Put(key, value)
 
-// 		if tree.Debug {
-// 			fmt.Printf("Save %x, value :%x\n", key, value)
-// 		}
-// 	}
-// 	// commit then reset cache
-// 	tree.cache = make(map[string]*Item)
+	// 	if tree.Debug {
+	// 		fmt.Printf("Save %x, value :%x\n", key, value)
+	// 	}
+	// }
+	// // commit then reset cache
+	// tree.cache = make(map[string]*Item)
 
-// 	return batch.Write()
-// }
+	// return batch.Write()
+}
 
 func (tree *Tree) deleteCase1(node *Node) {
 	if tree.IsEmptyKey(node.ParentKey()) {
