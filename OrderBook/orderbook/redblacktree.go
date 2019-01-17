@@ -494,6 +494,7 @@ func (tree *Tree) replaceNode(old *Node, new *Node) {
 			oldParent.RightKey(newKey)
 		}
 		// fmt.Printf("Update old parent %v\n", oldParent)
+		// we can have case like: remove a node, then add it again
 		tree.Save(oldParent)
 		// }
 		// fmt.Println("Replace tree node", old, new, oldParent)
@@ -608,7 +609,10 @@ func (tree *Tree) insertCase5(node *Node) {
 
 func (tree *Tree) Save(node *Node) error {
 	// value, err := json.Marshal(node.Item)
+	// tree.assertNotNull(node, hex.EncodeToString(node.Key))
+
 	return tree.db.Put(node.Key, node.Item)
+
 	// cacheKey := fmt.Sprintf("%x", node.Key)
 	// if !tree.itemCache.Contains(cacheKey) {
 	// 	tree.itemCache.Add(cacheKey, node.Item)
@@ -697,8 +701,9 @@ func (tree *Tree) deleteCase3(node *Node) {
 		tree.Save(sibling)
 		tree.deleteCase1(parent)
 
-		fmt.Println("delete node", string(node.Key), parent)
-
+		if tree.db.Debug {
+			fmt.Printf("delete node,  key: %x, parentKey :%x\n", node.Key, parent.Key)
+		}
 		tree.deleteNode(node, false)
 
 	} else {
@@ -773,7 +778,7 @@ func (tree *Tree) deleteCase6(node *Node) {
 	tree.Save(sibling)
 	tree.Save(parent)
 
-	fmt.Println("before-update ", tree, sibling, parent, siblingLeft, siblingRight)
+	// fmt.Println("before-update ", tree, sibling, parent, siblingLeft, siblingRight)
 
 	if tree.Comparator(node.Key, parent.LeftKey()) == 0 && nodeColor(siblingRight) == red {
 		siblingRight.Item.Color = black
@@ -805,12 +810,11 @@ func (tree *Tree) deleteNode(node *Node, force bool) {
 	// parent := node.Parent(tree)
 	// fmt.Println("Update parent", parent, "Delete node", node)
 	// if tree.Comparator(node.Key, parent.LeftKey()) == 0 {
-	// 	parent.LeftKey(emptyKey)
+	// 	parent.LeftKey(EmptyKey())
 	// } else {
-	// 	parent.RightKey(emptyKey)
+	// 	parent.RightKey(EmptyKey())
 	// }
 	// tree.Save(parent)
-
 	// if force {
 	tree.db.Delete(node.Key, force)
 	// } else {

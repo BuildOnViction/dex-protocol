@@ -15,9 +15,10 @@ const (
 	defaultMaxPending = 1024
 )
 
+// BatchItem : currently we do not support deletion batch, so ignore it
 type BatchItem struct {
-	Value   interface{}
-	Deleted bool
+	Value interface{}
+	// Deleted bool
 }
 
 type BatchDatabase struct {
@@ -82,7 +83,7 @@ func (db *BatchDatabase) Has(key []byte) (bool, error) {
 	cacheKey := db.getCacheKey(key)
 
 	// has in pending and is not deleted
-	if pendingItem, ok := db.pendingItems[cacheKey]; ok && !pendingItem.Deleted {
+	if _, ok := db.pendingItems[cacheKey]; ok { // && !pendingItem.Deleted {
 		return true, nil
 	}
 
@@ -103,9 +104,9 @@ func (db *BatchDatabase) Get(key []byte, val interface{}) (interface{}, error) {
 	cacheKey := db.getCacheKey(key)
 
 	if pendingItem, ok := db.pendingItems[cacheKey]; ok {
-		if pendingItem.Deleted {
-			return nil, nil
-		}
+		// if pendingItem.Deleted {
+		// 	return nil, nil
+		// }
 		// we get value from the pending item
 		return pendingItem.Value, nil
 	}
@@ -147,6 +148,13 @@ func (db *BatchDatabase) Get(key []byte, val interface{}) (interface{}, error) {
 func (db *BatchDatabase) Put(key []byte, val interface{}) error {
 
 	cacheKey := db.getCacheKey(key)
+
+	// // has in pending and is deleted
+	// if pendingItem, ok := db.pendingItems[cacheKey]; ok && pendingItem.Deleted {
+	// 	fmt.Println("Update a delete item")
+	// 	return nil
+	// }
+
 	// fmt.Println("PUT", cacheKey, val)
 	db.pendingItems[cacheKey] = &BatchItem{Value: val}
 
@@ -154,6 +162,7 @@ func (db *BatchDatabase) Put(key []byte, val interface{}) error {
 		return db.Commit()
 	}
 
+	// return db.Commit()
 	return nil
 }
 
@@ -168,8 +177,9 @@ func (db *BatchDatabase) Delete(key []byte, force bool) error {
 		delete(db.pendingItems, cacheKey)
 		db.cacheItems.Remove(cacheKey)
 	} else {
-		if item, ok := db.pendingItems[cacheKey]; ok {
-			item.Deleted = true
+		if _, ok := db.pendingItems[cacheKey]; ok {
+			// item.Deleted = true
+			db.db.Delete(key)
 			// remove cache key as well
 			db.cacheItems.Remove(cacheKey)
 			return nil
@@ -188,11 +198,11 @@ func (db *BatchDatabase) Commit() error {
 
 		// fmt.Printf("key :%x, cacheKey :%s\n", key, cacheKey)
 
-		if item.Deleted {
-			db.db.Delete(key)
-			// cache already has this item removed
-			continue
-		}
+		// if item.Deleted {
+		// 	db.db.Delete(key)
+		// 	// cache already has this item removed
+		// 	continue
+		// }
 
 		value, err := db.EncodeToBytes(item.Value)
 		if err != nil {

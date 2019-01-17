@@ -55,6 +55,7 @@ func (tree *RedBlackTreeExtended) RemoveMin() (value []byte, deleted bool) {
 	// fmt.Println("found min", node)
 	if found {
 		tree.Remove(node.Key)
+		// fmt.Printf("%x\n", node.Key)
 		return node.Value(), found
 	}
 	return nil, false
