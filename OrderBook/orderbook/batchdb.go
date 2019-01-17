@@ -180,6 +180,9 @@ func (db *BatchDatabase) Delete(key []byte, force bool) error {
 		if _, ok := db.pendingItems[cacheKey]; ok {
 			// item.Deleted = true
 			db.db.Delete(key)
+
+			// delete from pending Items
+			delete(db.pendingItems, cacheKey)
 			// remove cache key as well
 			db.cacheItems.Remove(cacheKey)
 			return nil
