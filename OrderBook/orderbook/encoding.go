@@ -241,7 +241,7 @@ func EncodeBytesOrderTreeItem(item *OrderTreeItem) ([]byte, error) {
 	start := 1 * common.HashLength
 	totalLength := start + 1*common.HashLength // PriceTreeKey
 	// uint64 is 8 byte
-	totalLength += 8 * 3 // NumOrders, Depth and PriceTreeSize
+	totalLength += 8 * 2 // NumOrders and PriceTreeSize
 
 	returnBytes := make([]byte, totalLength)
 
@@ -253,9 +253,6 @@ func EncodeBytesOrderTreeItem(item *OrderTreeItem) ([]byte, error) {
 	start += common.HashLength
 
 	binary.BigEndian.PutUint64(returnBytes[start:start+8], item.NumOrders)
-	start += 8
-
-	binary.BigEndian.PutUint64(returnBytes[start:start+8], item.Depth)
 	start += 8
 
 	binary.BigEndian.PutUint64(returnBytes[start:start+8], item.PriceTreeSize)
@@ -284,9 +281,6 @@ func DecodeBytesOrderTreeItem(bytes []byte, item *OrderTreeItem) error {
 	start += common.HashLength
 
 	item.NumOrders = binary.BigEndian.Uint64(bytes[start : start+8])
-	start += 8
-
-	item.Depth = binary.BigEndian.Uint64(bytes[start : start+8])
 	start += 8
 
 	// may have wrong format, just get next 8 bytes

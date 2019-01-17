@@ -9,11 +9,11 @@ import (
 )
 
 type OrderTreeItem struct {
-	Volume        *big.Int `json:"volume"`        // Contains total quantity from all Orders in tree
-	NumOrders     uint64   `json:"numOrders"`     // Contains count of Orders in tree
-	Depth         uint64   `json:"depth"`         // Number of different prices in tree (http://en.wikipedia.org/wiki/Order_book_(trading)#Book_depth)
-	PriceTreeKey  []byte   `json:"priceTreeKey"`  // Root Key of price tree
-	PriceTreeSize uint64   `json:"priceTreeSize"` // Number of nodes
+	Volume    *big.Int `json:"volume"`    // Contains total quantity from all Orders in tree
+	NumOrders uint64   `json:"numOrders"` // Contains count of Orders in tree
+	// Depth         uint64   `json:"depth"`         // Number of different prices in tree (http://en.wikipedia.org/wiki/Order_book_(trading)#Book_depth)
+	PriceTreeKey  []byte `json:"priceTreeKey"`  // Root Key of price tree
+	PriceTreeSize uint64 `json:"priceTreeSize"` // Number of nodes, currently it is Depth
 }
 
 // OrderTree : order tree structure for travelling
@@ -44,7 +44,8 @@ func NewOrderTree(orderDB *BatchDatabase, key []byte, orderBook *OrderBook) *Ord
 	item := &OrderTreeItem{
 		Volume:    Zero(),
 		NumOrders: 0,
-		Depth:     0,
+		// Depth:     0,
+		PriceTreeSize: 0,
 	}
 
 	slot := new(big.Int).SetBytes(key)
@@ -85,7 +86,7 @@ func (orderTree *OrderTree) Save() error {
 	priceTreeRoot := orderTree.PriceTree.Root()
 	if priceTreeRoot != nil {
 		orderTree.Item.PriceTreeKey = priceTreeRoot.Key
-		orderTree.Item.PriceTreeSize = orderTree.PriceTree.Size()
+		orderTree.Item.PriceTreeSize = orderTree.Depth()
 	}
 
 	// using rlp.EncodeToBytes as underlying encode method
@@ -130,9 +131,9 @@ func (orderTree *OrderTree) Restore() error {
 
 func (orderTree *OrderTree) String(startDepth int) string {
 	tabs := strings.Repeat("\t", startDepth)
-	return fmt.Sprintf("{\n\t%sMinPriceList: %s\n\t%sMaxPriceList: %s\n\t%sVolume: %v\n\t%sNumOrders: %d\n\t%sDepth: %d\n\t%sTreeSize: %d\n%s}",
+	return fmt.Sprintf("{\n\t%sMinPriceList: %s\n\t%sMaxPriceList: %s\n\t%sVolume: %v\n\t%sNumOrders: %d\n\t%sDepth: %d\n%s}",
 		tabs, orderTree.MinPriceList().String(startDepth+1), tabs, orderTree.MaxPriceList().String(startDepth+1), tabs,
-		orderTree.Item.Volume, tabs, orderTree.Item.NumOrders, tabs, orderTree.Item.Depth, tabs, orderTree.Item.PriceTreeSize, tabs)
+		orderTree.Item.Volume, tabs, orderTree.Item.NumOrders, tabs, orderTree.Depth(), tabs)
 }
 
 func (orderTree *OrderTree) Length() uint64 {
@@ -228,7 +229,7 @@ func (orderTree *OrderTree) PriceList(price *big.Int) *OrderList {
 // CreatePrice : create new price list into PriceTree and PriceMap
 func (orderTree *OrderTree) CreatePrice(price *big.Int) *OrderList {
 
-	orderTree.Item.Depth++
+	// orderTree.Item.Depth++
 	newList := NewOrderList(price, orderTree)
 	// put new price list into tree
 	newList.Save()
@@ -258,10 +259,15 @@ func (orderTree *OrderTree) SaveOrderList(orderList *OrderList) error {
 
 }
 
+func (orderTree *OrderTree) Depth() uint64 {
+	return orderTree.PriceTree.Size()
+}
+
 // RemovePrice : delete a list by price
 func (orderTree *OrderTree) RemovePrice(price *big.Int) {
-	if orderTree.Item.Depth > 0 {
-		orderTree.Item.Depth--
+	if orderTree.Depth() > 0 {
+		// orderTree.Item.Depth--
+		// using tree size
 		orderListKey := orderTree.getKeyFromPrice(price)
 		orderTree.PriceTree.Remove(orderListKey)
 
@@ -511,7 +517,7 @@ func (orderTree *OrderTree) decodeOrderList(bytes []byte) *OrderList {
 
 // MaxPrice : get the max price
 func (orderTree *OrderTree) MaxPrice() *big.Int {
-	if orderTree.Item.Depth > 0 {
+	if orderTree.Depth() > 0 {
 		if bytes, found := orderTree.PriceTree.GetMax(); found {
 			item := orderTree.getOrderListItem(bytes)
 			if item != nil {
@@ -524,7 +530,7 @@ func (orderTree *OrderTree) MaxPrice() *big.Int {
 
 // MinPrice : get the min price
 func (orderTree *OrderTree) MinPrice() *big.Int {
-	if orderTree.Item.Depth > 0 {
+	if orderTree.Depth() > 0 {
 		if bytes, found := orderTree.PriceTree.GetMin(); found {
 			item := orderTree.getOrderListItem(bytes)
 			if item != nil {
@@ -537,7 +543,7 @@ func (orderTree *OrderTree) MinPrice() *big.Int {
 
 // MaxPriceList : get max price list
 func (orderTree *OrderTree) MaxPriceList() *OrderList {
-	if orderTree.Item.Depth > 0 {
+	if orderTree.Depth() > 0 {
 		if bytes, found := orderTree.PriceTree.GetMax(); found {
 			return orderTree.decodeOrderList(bytes)
 		}
@@ -548,7 +554,7 @@ func (orderTree *OrderTree) MaxPriceList() *OrderList {
 
 // MinPriceList : get min price list
 func (orderTree *OrderTree) MinPriceList() *OrderList {
-	if orderTree.Item.Depth > 0 {
+	if orderTree.Depth() > 0 {
 		if bytes, found := orderTree.PriceTree.GetMin(); found {
 			return orderTree.decodeOrderList(bytes)
 		}
