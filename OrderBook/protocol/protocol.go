@@ -7,7 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/swarm/pss"
+
+	// "github.com/ethereum/go-ethereum/swarm/pss"
 
 	demo "github.com/tomochain/orderbook/common"
 	"github.com/tomochain/orderbook/orderbook"
@@ -29,7 +30,7 @@ var (
 		},
 	}
 
-	OrderbookTopic = pss.ProtocolTopic(OrderbookProtocol)
+	// OrderbookTopic = pss.ProtocolTopic(OrderbookProtocol)
 )
 
 type OrderbookMsg struct {

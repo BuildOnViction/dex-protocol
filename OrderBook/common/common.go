@@ -13,18 +13,15 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/swarm"
-	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/pss"
+
+	// "github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/fatih/color"
 
 	// peer.ID = enode.ID, NodeID = enode.ID
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -64,10 +61,10 @@ func init() {
 	log.Root().SetHandler(h)
 }
 
-// NewSwarmService : short cut for create swarm service
-func NewSwarmService(stack *node.Node, bzzport int) func(ctx *node.ServiceContext) (node.Service, error) {
-	return NewSwarmServiceWithProtocol(stack, bzzport, nil, nil, nil, nil)
-}
+// // NewSwarmService : short cut for create swarm service
+// func NewSwarmService(stack *node.Node, bzzport int) func(ctx *node.ServiceContext) (node.Service, error) {
+// 	return NewSwarmServiceWithProtocol(stack, bzzport, nil, nil, nil, nil)
+// }
 
 func setInterval(someFunc func(), milliseconds int, async bool) chan bool {
 
@@ -108,66 +105,66 @@ func setInterval(someFunc func(), milliseconds int, async bool) chan bool {
 
 }
 
-func NewSwarmServiceWithProtocolAndPrivateKey(stack *node.Node, bzzport int, specs []*protocols.Spec, protocols []*p2p.Protocol, topic *pss.Topic, pssprotos *[]*pss.Protocol, prvkey *ecdsa.PrivateKey) func(ctx *node.ServiceContext) (node.Service, error) {
-	return func(ctx *node.ServiceContext) (node.Service, error) {
+// func NewSwarmServiceWithProtocolAndPrivateKey(stack *node.Node, bzzport int, specs []*protocols.Spec, protocols []*p2p.Protocol, topic *pss.Topic, pssprotos *[]*pss.Protocol, prvkey *ecdsa.PrivateKey) func(ctx *node.ServiceContext) (node.Service, error) {
+// 	return func(ctx *node.ServiceContext) (node.Service, error) {
 
-		// create the swarm overlay address
-		//chbookaddr := crypto.PubkeyToAddress(prvkey.PublicKey)
+// 		// create the swarm overlay address
+// 		//chbookaddr := crypto.PubkeyToAddress(prvkey.PublicKey)
 
-		// configure and create a swarm instance
-		bzzdir := stack.InstanceDir() // todo: what is the difference between this and datadir?
-		bzzconfig := bzzapi.NewConfig()
-		bzzconfig.Cors = "*" // allow access to all
-		bzzconfig.NetworkID = BzzDefaultNetworkId
-		bzzconfig.DeliverySkipCheck = true
-		bzzconfig.SyncEnabled = true
-		bzzconfig.Path = bzzdir
-		bzzconfig.Pss.AllowRaw = true
-		bzzconfig.Init(prvkey)
-		bzzconfig.Port = fmt.Sprintf("%d", bzzport)
+// 		// configure and create a swarm instance
+// 		bzzdir := stack.InstanceDir() // todo: what is the difference between this and datadir?
+// 		bzzconfig := bzzapi.NewConfig()
+// 		bzzconfig.Cors = "*" // allow access to all
+// 		bzzconfig.NetworkID = BzzDefaultNetworkId
+// 		bzzconfig.DeliverySkipCheck = true
+// 		bzzconfig.SyncEnabled = true
+// 		bzzconfig.Path = bzzdir
+// 		bzzconfig.Pss.AllowRaw = true
+// 		bzzconfig.Init(prvkey)
+// 		bzzconfig.Port = fmt.Sprintf("%d", bzzport)
 
-		svc, err := swarm.NewSwarm(bzzconfig, nil)
-		if err != nil {
-			Log.Crit("unable to configure swarm", "err", err)
-			return nil, err
-		}
+// 		svc, err := swarm.NewSwarm(bzzconfig, nil)
+// 		if err != nil {
+// 			Log.Crit("unable to configure swarm", "err", err)
+// 			return nil, err
+// 		}
 
-		for i, s := range specs {
+// 		for i, s := range specs {
 
-			p, err := svc.RegisterPssProtocol(s, protocols[i], &pss.ProtocolParams{
-				Asymmetric: true,
-				Symmetric:  true,
-			})
-			if err != nil {
-				return nil, err
-			}
+// 			p, err := svc.RegisterPssProtocol(s, protocols[i], &pss.ProtocolParams{
+// 				Asymmetric: true,
+// 				Symmetric:  true,
+// 			})
+// 			if err != nil {
+// 				return nil, err
+// 			}
 
-			// wrap to handler
-			// handler := pss.NewHandler(p.Handle)
-			handler := p.Handle
-			// register topic for this protocol
-			if topic != nil {
-				p.Pss.Register(topic, handler)
-			}
-			// append to pssprotos
-			if pssprotos != nil {
-				*pssprotos = append(*pssprotos, p)
-				// LogError("Add item", "len", len(*pssprotos))
-			}
+// 			// wrap to handler
+// 			// handler := pss.NewHandler(p.Handle)
+// 			handler := p.Handle
+// 			// register topic for this protocol
+// 			if topic != nil {
+// 				p.Pss.Register(topic, handler)
+// 			}
+// 			// append to pssprotos
+// 			if pssprotos != nil {
+// 				*pssprotos = append(*pssprotos, p)
+// 				// LogError("Add item", "len", len(*pssprotos))
+// 			}
 
-		}
+// 		}
 
-		return svc, nil
-	}
-}
+// 		return svc, nil
+// 	}
+// }
 
-// NewSwarmServiceWithProtocol : create new swarm service with protocol and topic
-func NewSwarmServiceWithProtocol(stack *node.Node, bzzport int, specs []*protocols.Spec, protocols []*p2p.Protocol, topic *pss.Topic, pssprotos *[]*pss.Protocol) func(ctx *node.ServiceContext) (node.Service, error) {
-	// get the encrypted private key file
-	// load the private key from the file content ?
-	prvkey, _ := crypto.GenerateKey()
-	return NewSwarmServiceWithProtocolAndPrivateKey(stack, bzzport, specs, protocols, topic, pssprotos, prvkey)
-}
+// // NewSwarmServiceWithProtocol : create new swarm service with protocol and topic
+// func NewSwarmServiceWithProtocol(stack *node.Node, bzzport int, specs []*protocols.Spec, protocols []*p2p.Protocol, topic *pss.Topic, pssprotos *[]*pss.Protocol) func(ctx *node.ServiceContext) (node.Service, error) {
+// 	// get the encrypted private key file
+// 	// load the private key from the file content ?
+// 	prvkey, _ := crypto.GenerateKey()
+// 	return NewSwarmServiceWithProtocolAndPrivateKey(stack, bzzport, specs, protocols, topic, pssprotos, prvkey)
+// }
 
 func LogInfo(msg string, ctx ...interface{}) {
 	Log.Info(color.HiGreenString(msg), ctx...)
